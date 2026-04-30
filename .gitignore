@@ -1,0 +1,9 @@
+data/matches.json
+checkpoints/
+__pycache__/
+.claude/
+.venv/
+venv/
+*.pyc
+*.pyo
+.DS_Store
