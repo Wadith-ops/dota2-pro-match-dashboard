@@ -67,14 +67,13 @@ Split into 5 steps using `# %%` cells in VS Code:
 
 **Pipeline fixes done:** `os.chdir()` removed (replaced with `Path(__file__).parent` anchoring); `SAVE_RAW` now reads from env var (defaults `true` locally, set `false` in CI).
 
-## Pipeline Automation (Planned — Not Yet Implemented)
-Architecture for GitHub Actions when a tournament is running:
-- Trigger: `workflow_dispatch` (manual) or `schedule: cron "0 6 * * *"` (daily 6am UTC)
-- Steps: checkout → setup Python → run pipeline → commit updated CSV with `[skip ci]` → push
-- Required pipeline changes — both already done:
-  1. ✅ Removed `os.chdir()` — paths now anchored to `Path(__file__).parent`
-  2. ✅ `SAVE_RAW` reads from env var — set `SAVE_RAW=false` in CI to skip writing 700 MB file
-- Rate limit: ~200 new matches/week during a live tournament ≈ well within 50k calls/month free tier
+## Updating Live Data (Current Process)
+Run locally after tournaments, then push the updated CSV:
+1. Run `opendota_pipeline.py` — fetches only new matches (checkpoint skips already-fetched IDs)
+2. Run Step 5 to regenerate `matches_flat.csv`
+3. `git add data/matches_flat.csv` → commit → push → Streamlit Cloud redeploys automatically
+
+Full CI automation is deferred — Actions runners have no access to the local `matches.json`, so a full re-fetch would be needed on every run. Revisit with Git LFS or cloud storage when manual updates become impractical.
 
 ## Data Sources
 - API: OpenDota (https://api.opendota.com/api)

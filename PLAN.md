@@ -56,12 +56,19 @@ Expand `dashboard.py` from single-page Roshan analysis to a 4-tab layout.
 ---
 
 ## Phase 3: Pipeline Automation
-**Status: Design only — implement when next tournament starts**
+**Status: Deferred — manual update process chosen for now**
 
-GitHub Actions workflow (`.github/workflows/update_data.yml`):
-- Trigger: `workflow_dispatch` (manual) or `schedule: cron "0 6 * * *"` (daily 6am UTC)
-- Steps: checkout → setup Python → run pipeline → commit updated CSV with `[skip ci]` → push
+### Chosen approach: Option A (manual local runs)
+Run the pipeline locally after tournaments, then commit and push the updated CSV:
+1. Run `opendota_pipeline.py` locally — fetches only new matches (checkpoint skips already-fetched IDs), appends to `matches.json`
+2. Run Step 5 (`build_dataframe`) — regenerates `matches_flat.csv`
+3. `git add data/matches_flat.csv` → commit → push → Streamlit Cloud redeploys automatically
 
-**Pipeline fixes required before this works:**
-1. ✅ Removed `os.chdir(r"C:\Users\Wade\...")` — replaced with `Path(__file__).parent` anchoring
-2. ✅ `SAVE_RAW` now reads from env var: `os.getenv("SAVE_RAW", "true").lower() == "true"` — set `SAVE_RAW=false` in CI to skip writing 700 MB file
+This works because `matches.json` and the checkpoint live locally and persist between runs.
+
+### Why full automation is deferred
+GitHub Actions runners start with no `matches.json` — the pipeline would need to re-fetch all 1,279+ matches from scratch on every run (~20 min, ~1,300 API calls). Solving this requires one of:
+- **Option B** — commit `matches.json` via Git LFS (file too large for standard git)
+- **Option C** — store `matches.json` in cloud storage (S3, Supabase etc.) and sync in CI
+
+Revisit when tournament cadence makes manual updates impractical.
