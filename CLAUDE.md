@@ -7,7 +7,8 @@ Pivoted from EDA to a shareable dashboard. Pipeline automation for live tourname
 ## Current Status
 - Data pipeline complete and working
 - 1,279 matches collected across 10 Tier 1 leagues (2024–2026), patches 7.39 / 7.40 / 7.41
-- Dashboard (`dashboard.py`) live locally; to be deployed to Streamlit Community Cloud
+- Dashboard live at https://dota2-pro-match-dashboard-9kymmqtgrymab25ofas4oh.streamlit.app/
+- GitHub repo: https://github.com/Wadith-ops/dota2-pro-match-dashboard
 - `matches.json` (705 MB) is local-only and gitignored; `matches_flat.csv` (220 KB) is the deployment data source
 
 ## File Structure
@@ -47,10 +48,13 @@ Streamlit + Plotly. Single page with global sidebar filters and 4 tabs (planned 
 - `patch` column is a float (7.39, 7.4, 7.41) — always use `patch_label` for display (formats 7.4 → "7.40")
 - `game_mode` — 1,268 / 1,279 matches are mode 2 (Captain's Mode); note or filter for mode-sensitive stats
 
-## Hosting (Planned)
-- Platform: Streamlit Community Cloud (free, deploys from GitHub on every push to `main`)
+## Hosting
+- Live URL: https://dota2-pro-match-dashboard-9kymmqtgrymab25ofas4oh.streamlit.app/
+- GitHub: https://github.com/Wadith-ops/dota2-pro-match-dashboard
+- Platform: Streamlit Community Cloud — redeploys automatically on every push to `master`
 - Data: only `matches_flat.csv` committed to repo; `matches.json` stays local
 - To update live data: run pipeline locally → regenerate CSV → commit `data/matches_flat.csv` → push
+- Note: use flexible version ranges in `requirements.txt` (not exact pins) — Streamlit Cloud runs Python 3.14 by default and exact pins caused import failures
 
 ## Data Pipeline (opendota_pipeline.py)
 Split into 5 steps using `# %%` cells in VS Code:
@@ -61,15 +65,15 @@ Split into 5 steps using `# %%` cells in VS Code:
 - **Step 4** — Main loop, match-level checkpoint only, appends to matches.json
 - **Step 5** — Flattens raw JSON to pandas DataFrame, exports matches_flat.csv
 
-**Known issue (fix before automation):** Line 4 hardcodes `os.chdir(r"C:\Users\Wade\...")` — must be removed before any headless/CI use.
+**Pipeline fixes done:** `os.chdir()` removed (replaced with `Path(__file__).parent` anchoring); `SAVE_RAW` now reads from env var (defaults `true` locally, set `false` in CI).
 
 ## Pipeline Automation (Planned — Not Yet Implemented)
 Architecture for GitHub Actions when a tournament is running:
 - Trigger: `workflow_dispatch` (manual) or `schedule: cron "0 6 * * *"` (daily 6am UTC)
 - Steps: checkout → setup Python → run pipeline → commit updated CSV with `[skip ci]` → push
-- Required pipeline changes before this works:
-  1. Remove `os.chdir()` on line 4 of `opendota_pipeline.py`
-  2. Make `SAVE_RAW` read from env var: `os.getenv("SAVE_RAW", "true").lower() == "true"` (set `false` in CI to skip writing 700 MB file)
+- Required pipeline changes — both already done:
+  1. ✅ Removed `os.chdir()` — paths now anchored to `Path(__file__).parent`
+  2. ✅ `SAVE_RAW` reads from env var — set `SAVE_RAW=false` in CI to skip writing 700 MB file
 - Rate limit: ~200 new matches/week during a live tournament ≈ well within 50k calls/month free tier
 
 ## Data Sources
@@ -125,9 +129,9 @@ Architecture for GitHub Actions when a tournament is running:
 - Key libraries: requests, pandas, plotly, streamlit
 
 ## Next Steps
-1. Create `.gitignore` and `requirements.txt`
-2. Set up GitHub repo and deploy to Streamlit Community Cloud
-3. Expand `dashboard.py` to 4-tab layout (Tabs 2–4 as described above)
+1. ✅ Create `.gitignore` and `requirements.txt`
+2. ✅ Set up GitHub repo and deploy to Streamlit Community Cloud
+3. Expand `dashboard.py` to 4-tab layout (Tabs 2–4 as described in PLAN.md)
 4. Pipeline automation via GitHub Actions (when next tournament starts)
 
 ## Out of Scope for Now

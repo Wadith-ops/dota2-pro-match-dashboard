@@ -6,15 +6,15 @@ Originally an EDA / data science project. Pivoting to a **public-facing Streamli
 ---
 
 ## Phase 1: Repo + Hosting Setup
-**Status: Not started**
+**Status: ✅ Complete**
 
-1. Create `.gitignore` — must exclude `data/matches.json` (705 MB), `checkpoints/`, `__pycache__/`, `.claude/`, `.venv/`
-2. Create `requirements.txt` — pinned: `streamlit`, `plotly`, `pandas`, `requests`
-3. `git init`, commit only: `.gitignore`, `requirements.txt`, `CLAUDE.md`, `PLAN.md`, `dashboard.py`, `opendota_pipeline.py`, `data/matches_flat.csv`
-4. Push to a new public GitHub repo (suggested name: `dota2-pro-match-dashboard`)
-5. Deploy on Streamlit Community Cloud (share.streamlit.io) — connect repo, set main file = `dashboard.py`
+1. ✅ Created `.gitignore` — `matches.json`, `checkpoints/`, `__pycache__/` excluded
+2. ✅ Created `requirements.txt` — flexible version ranges (`>=`) to ensure Streamlit Cloud compatibility
+3. ✅ `git init`, committed only the right files — `matches.json` never tracked
+4. ✅ Pushed to https://github.com/Wadith-ops/dota2-pro-match-dashboard
+5. ✅ Live at https://dota2-pro-match-dashboard-9kymmqtgrymab25ofas4oh.streamlit.app/
 
-No secrets needed — the CSV is bundled in the repo. Streamlit Cloud redeploys automatically on every push to `main`.
+Note: exact version pins caused a `ModuleNotFoundError` on Streamlit Cloud (Python 3.14 environment); switched to `>=` ranges to let the cloud resolver pick compatible versions.
 
 ---
 
@@ -62,6 +62,6 @@ GitHub Actions workflow (`.github/workflows/update_data.yml`):
 - Trigger: `workflow_dispatch` (manual) or `schedule: cron "0 6 * * *"` (daily 6am UTC)
 - Steps: checkout → setup Python → run pipeline → commit updated CSV with `[skip ci]` → push
 
-**Two pipeline fixes required before this works:**
-1. Remove `os.chdir(r"C:\Users\Wade\...")` on line 4 of `opendota_pipeline.py`
-2. Make `SAVE_RAW` read from env var: `os.getenv("SAVE_RAW", "true").lower() == "true"` — set `false` in CI to avoid writing 700 MB file
+**Pipeline fixes required before this works:**
+1. ✅ Removed `os.chdir(r"C:\Users\Wade\...")` — replaced with `Path(__file__).parent` anchoring
+2. ✅ `SAVE_RAW` now reads from env var: `os.getenv("SAVE_RAW", "true").lower() == "true"` — set `SAVE_RAW=false` in CI to skip writing 700 MB file
