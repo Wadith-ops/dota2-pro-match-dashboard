@@ -19,7 +19,9 @@ Note: exact version pins caused a `ModuleNotFoundError` on Streamlit Cloud (Pyth
 ---
 
 ## Phase 2: Dashboard Expansion
-**Status: Not started**
+**Status: Needs review — edit this section before implementing**
+
+The sections below are a first draft. Review and amend before starting a new session to implement. Change, remove, or add anything that doesn't fit what you want.
 
 Expand `dashboard.py` from single-page Roshan analysis to a 4-tab layout.
 
