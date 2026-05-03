@@ -151,6 +151,62 @@ with tab1:
     c8.metric("Avg Team Barracks/Game", f"{avg_team_barr:.2f}")
     c9.metric("Both Lost Barracks", f"{pct_both_barr:.1f}%")
 
+    # ── Team Stats Table ──────────────────────────────────────────────────────
+    st.subheader("Team Breakdown")
+
+    team_table = (
+        team_filtered.groupby("team_name")
+        .agg(
+            matches=("match_id", "nunique"),
+            wins=("team_won", "sum"),
+            avg_team_roshans=("team_roshan_kills", "mean"),
+            avg_total_roshans=("total_roshan", "mean"),
+            avg_team_kills=("team_kills", "mean"),
+            avg_total_kills=("total_kills", "mean"),
+            avg_team_barracks=("team_barracks_killed", "mean"),
+            avg_total_barracks=("total_barracks", "mean"),
+            pct_team_2plus_rosh=("team_roshan_kills", lambda x: (x >= 2).mean() * 100),
+            pct_total_3plus_rosh=("total_roshan", lambda x: (x >= 3).mean() * 100),
+            pct_both_barracks=("both_lost_barracks", lambda x: x.mean() * 100),
+            avg_duration=("duration_mins", "mean"),
+        )
+        .reset_index()
+    )
+    team_table["win_pct"] = team_table["wins"] / team_table["matches"] * 100
+    team_table = team_table.sort_values("matches", ascending=False)
+
+    display_team = team_table.rename(columns={
+        "team_name": "Team",
+        "matches": "Matches",
+        "win_pct": "Win %",
+        "avg_team_roshans": "Avg Team Roshans/Game",
+        "avg_total_roshans": "Avg Total Roshans/Game",
+        "avg_team_kills": "Avg Team Kills/Game",
+        "avg_total_kills": "Avg Total Kills/Game",
+        "avg_team_barracks": "Avg Team Barracks/Game",
+        "avg_total_barracks": "Avg Total Barracks/Game",
+        "pct_team_2plus_rosh": "Team 2+ Roshans %",
+        "pct_total_3plus_rosh": "Total 3+ Roshans %",
+        "pct_both_barracks": "Both Lost Barracks %",
+        "avg_duration": "Avg Duration (min)",
+    })
+    for col in ["Avg Team Roshans/Game", "Avg Total Roshans/Game",
+                "Avg Team Barracks/Game", "Avg Total Barracks/Game"]:
+        display_team[col] = display_team[col].round(2)
+    for col in ["Win %", "Avg Team Kills/Game", "Avg Total Kills/Game",
+                "Team 2+ Roshans %", "Total 3+ Roshans %", "Both Lost Barracks %", "Avg Duration (min)"]:
+        display_team[col] = display_team[col].round(1)
+
+    st.dataframe(
+        display_team[["Team", "Matches", "Win %",
+                       "Avg Team Roshans/Game", "Avg Total Roshans/Game",
+                       "Avg Team Kills/Game", "Avg Total Kills/Game",
+                       "Avg Team Barracks/Game", "Avg Total Barracks/Game",
+                       "Team 2+ Roshans %", "Total 3+ Roshans %", "Both Lost Barracks %",
+                       "Avg Duration (min)"]],
+        use_container_width=True, hide_index=True,
+    )
+
     st.divider()
 
     # ── Roshan ───────────────────────────────────────────────────────────────
