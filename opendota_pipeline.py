@@ -22,7 +22,8 @@ ALL_LEAGUES = {
     19269: "DreamLeague Season 28",
     19435: "PGL Wallachia 2026 Season 7",
     19422: "ESL One Birmingham 2026",
-    19543: "PGL Wallachia 2026 Season 8"
+    19543: "PGL Wallachia 2026 Season 8",
+    19696: "DreamLeague Season 29"
 }
 
 # Only fetch the below leagues for this run
