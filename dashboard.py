@@ -108,7 +108,7 @@ if len(filtered) == 0:
 
 # ── Page ──────────────────────────────────────────────────────────────────────
 st.title("Dota 2 Pro Match Analysis")
-tab1, tab2, tab3 = st.tabs(["Team", "Tournament", "Meta Trends"])
+tab1, tab2, tab3, tab4 = st.tabs(["Team", "Tournament", "Meta Trends", "Head to Head"])
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -534,3 +534,156 @@ with tab3:
                        color_discrete_sequence=px.colors.qualitative.Set2)
     fig_m4.update_layout(showlegend=False)
     col4.plotly_chart(fig_m4, use_container_width=True)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TAB 4 — HEAD TO HEAD
+# ══════════════════════════════════════════════════════════════════════════════
+with tab4:
+    st.subheader("Head to Head")
+
+    h2h_teams = sorted(
+        set(filtered["radiant_team_name"].dropna())
+        | set(filtered["dire_team_name"].dropna())
+        - ANON_NAMES
+    )
+
+    col_a, col_b = st.columns(2)
+    team_a = col_a.selectbox("Team A", ["— select —"] + h2h_teams, key="h2h_a")
+    team_b = col_b.selectbox("Team B", ["— select —"] + h2h_teams, key="h2h_b")
+
+    if team_a == "— select —" or team_b == "— select —":
+        st.info("Select two teams above to see their head-to-head record.")
+    elif team_a == team_b:
+        st.warning("Select two different teams.")
+    else:
+        h2h = filtered[
+            ((filtered["radiant_team_name"] == team_a) & (filtered["dire_team_name"] == team_b))
+            | ((filtered["radiant_team_name"] == team_b) & (filtered["dire_team_name"] == team_a))
+        ].copy()
+
+        if len(h2h) == 0:
+            st.warning(f"No matches found between {team_a} and {team_b} with the current filters.")
+        else:
+            h2h["winner"] = h2h.apply(
+                lambda r: r["radiant_team_name"] if r["radiant_win"] else r["dire_team_name"], axis=1
+            )
+            h2h["team_a_won"] = h2h["winner"] == team_a
+
+            team_a_wins = int(h2h["team_a_won"].sum())
+            team_b_wins = len(h2h) - team_a_wins
+
+            # ── Record ───────────────────────────────────────────────────────
+            st.markdown(f"### {team_a} vs {team_b}")
+            r1, r2, r3 = st.columns(3)
+            r1.metric(f"{team_a} Wins", team_a_wins)
+            r2.metric("Matches Played", len(h2h))
+            r3.metric(f"{team_b} Wins", team_b_wins)
+
+            st.divider()
+
+            # ── Per-team comparative stats ────────────────────────────────
+            h2h_team = build_team_perspective("h2h_" + team_a + "_" + team_b + str(len(h2h)), h2h)
+            h2h_team = h2h_team[h2h_team["team_name"].isin([team_a, team_b])]
+
+            comp = (
+                h2h_team.groupby("team_name")
+                .agg(
+                    avg_roshans=("team_roshan_kills", "mean"),
+                    avg_kills=("team_kills", "mean"),
+                    avg_barracks=("team_barracks_killed", "mean"),
+                )
+                .reset_index()
+            )
+            # Preserve Team A / Team B order in charts
+            comp["team_name"] = pd.Categorical(comp["team_name"], categories=[team_a, team_b], ordered=True)
+            comp = comp.sort_values("team_name")
+            bar_colors = ["#4C9BE8", "#E88C4C", "#AAAAAA"]
+
+            avg_total_roshans = h2h["total_roshan"].mean()
+            avg_total_kills = h2h["total_kills"].mean()
+            avg_total_barracks = h2h["total_barracks"].mean()
+
+            x_labels = list(comp["team_name"]) + ["Match Total"]
+
+            col1, col2 = st.columns(2)
+
+            fig_h1 = go.Figure(go.Bar(
+                x=x_labels,
+                y=list(comp["avg_roshans"]) + [avg_total_roshans],
+                marker_color=bar_colors,
+                text=[f"{v:.2f}" for v in list(comp["avg_roshans"]) + [avg_total_roshans]],
+                textposition="outside",
+            ))
+            fig_h1.update_layout(title="Avg Roshans/Game", yaxis_title="Avg / Game",
+                                  showlegend=False, xaxis_title="")
+            col1.plotly_chart(fig_h1, use_container_width=True)
+
+            fig_h2 = go.Figure(go.Bar(
+                x=x_labels,
+                y=list(comp["avg_kills"]) + [avg_total_kills],
+                marker_color=bar_colors,
+                text=[f"{v:.1f}" for v in list(comp["avg_kills"]) + [avg_total_kills]],
+                textposition="outside",
+            ))
+            fig_h2.update_layout(title="Avg Kills/Game", yaxis_title="Avg / Game",
+                                  showlegend=False, xaxis_title="")
+            col2.plotly_chart(fig_h2, use_container_width=True)
+
+            col3, col4 = st.columns(2)
+
+            fig_h3 = go.Figure(go.Bar(
+                x=x_labels,
+                y=list(comp["avg_barracks"]) + [avg_total_barracks],
+                marker_color=bar_colors,
+                text=[f"{v:.2f}" for v in list(comp["avg_barracks"]) + [avg_total_barracks]],
+                textposition="outside",
+            ))
+            fig_h3.update_layout(title="Avg Barracks Destroyed/Game", yaxis_title="Avg / Game",
+                                  showlegend=False, xaxis_title="")
+            col3.plotly_chart(fig_h3, use_container_width=True)
+
+            # Team A win % as Radiant vs Dire
+            h2h["team_a_side"] = h2h.apply(
+                lambda r: "Radiant" if r["radiant_team_name"] == team_a else "Dire", axis=1
+            )
+            side_rec = (
+                h2h.groupby("team_a_side")["team_a_won"]
+                .agg(wins="sum", matches="count")
+                .reset_index()
+            )
+            side_rec["win_pct"] = side_rec["wins"] / side_rec["matches"] * 100
+            side_rec["label"] = side_rec.apply(
+                lambda r: f"{int(r['wins'])}W–{int(r['matches'] - r['wins'])}L", axis=1
+            )
+
+            fig_h4 = go.Figure(go.Bar(
+                x=side_rec["team_a_side"], y=side_rec["win_pct"],
+                text=side_rec["label"], textposition="outside",
+                marker_color=["#4CE87A", "#E84C4C"],
+            ))
+            fig_h4.update_layout(
+                title=f"{team_a} Win % by Side",
+                xaxis_title="Side played as", yaxis_title="Win %",
+                yaxis_range=[0, 130], showlegend=False,
+            )
+            col4.plotly_chart(fig_h4, use_container_width=True)
+
+            st.divider()
+
+            # ── Match history table ───────────────────────────────────────
+            st.subheader("Match History")
+            h2h_display = h2h[[
+                "start_time", "league_name", "patch_label",
+                "radiant_team_name", "dire_team_name", "winner",
+                "duration_mins", "total_roshan", "total_kills", "total_barracks",
+            ]].copy().sort_values("start_time", ascending=False)
+            h2h_display["start_time"] = h2h_display["start_time"].dt.strftime("%Y-%m-%d")
+            h2h_display["duration_mins"] = h2h_display["duration_mins"].round(1)
+            h2h_display = h2h_display.rename(columns={
+                "start_time": "Date", "league_name": "Tournament", "patch_label": "Patch",
+                "radiant_team_name": "Radiant", "dire_team_name": "Dire", "winner": "Winner",
+                "duration_mins": "Duration (min)", "total_roshan": "Roshans",
+                "total_kills": "Kills", "total_barracks": "Barracks",
+            })
+            st.dataframe(h2h_display, use_container_width=True, hide_index=True)
