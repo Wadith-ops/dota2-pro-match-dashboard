@@ -18,6 +18,7 @@ def load_data():
     df["total_roshan"] = df["radiant_roshan_kills"] + df["dire_roshan_kills"]
     df["total_kills"] = df["radiant_score"] + df["dire_score"]
     df["total_barracks"] = df["radiant_barracks_lost"] + df["dire_barracks_lost"]
+    df["total_towers"] = df["radiant_towers_lost"] + df["dire_towers_lost"]
     df["both_lost_barracks"] = (df["radiant_barracks_lost"] >= 1) & (df["dire_barracks_lost"] >= 1)
     df["patch_label"] = df["patch"].apply(lambda x: f"{x:.2f}" if pd.notna(x) else "Unknown")
     return df
@@ -28,13 +29,14 @@ def build_team_perspective(df_hash: str, df: pd.DataFrame) -> pd.DataFrame:
     base_cols = [
         "match_id", "league_name", "patch_label", "start_time",
         "duration_mins", "radiant_win", "first_roshan_team", "first_roshan_time_mins",
-        "total_roshan", "total_kills", "total_barracks", "both_lost_barracks",
+        "total_roshan", "total_kills", "total_barracks", "total_towers", "both_lost_barracks",
     ]
     radiant = df[base_cols].copy()
     radiant["team_name"] = df["radiant_team_name"].values
     radiant["team_roshan_kills"] = df["radiant_roshan_kills"].values
     radiant["team_kills"] = df["radiant_score"].values
     radiant["team_barracks_killed"] = df["dire_barracks_lost"].values
+    radiant["team_towers_killed"] = df["dire_towers_lost"].values
     radiant["side"] = "Radiant"
     radiant["team_won"] = df["radiant_win"].values
     radiant["got_first_roshan"] = (df["first_roshan_team"] == "radiant").values
@@ -44,6 +46,7 @@ def build_team_perspective(df_hash: str, df: pd.DataFrame) -> pd.DataFrame:
     dire["team_roshan_kills"] = df["dire_roshan_kills"].values
     dire["team_kills"] = df["dire_score"].values
     dire["team_barracks_killed"] = df["radiant_barracks_lost"].values
+    dire["team_towers_killed"] = df["radiant_towers_lost"].values
     dire["side"] = "Dire"
     dire["team_won"] = (~df["radiant_win"]).values
     dire["got_first_roshan"] = (df["first_roshan_team"] == "dire").values
@@ -592,6 +595,7 @@ with tab4:
                     avg_roshans=("team_roshan_kills", "mean"),
                     avg_kills=("team_kills", "mean"),
                     avg_barracks=("team_barracks_killed", "mean"),
+                    avg_towers=("team_towers_killed", "mean"),
                 )
                 .reset_index()
             )
@@ -603,6 +607,7 @@ with tab4:
             avg_total_roshans = h2h["total_roshan"].mean()
             avg_total_kills = h2h["total_kills"].mean()
             avg_total_barracks = h2h["total_barracks"].mean()
+            avg_total_towers = h2h["total_towers"].mean()
 
             x_labels = list(comp["team_name"]) + ["Match Total"]
 
@@ -643,30 +648,15 @@ with tab4:
                                   showlegend=False, xaxis_title="")
             col3.plotly_chart(fig_h3, use_container_width=True)
 
-            # Team A win % as Radiant vs Dire
-            h2h["team_a_side"] = h2h.apply(
-                lambda r: "Radiant" if r["radiant_team_name"] == team_a else "Dire", axis=1
-            )
-            side_rec = (
-                h2h.groupby("team_a_side")["team_a_won"]
-                .agg(wins="sum", matches="count")
-                .reset_index()
-            )
-            side_rec["win_pct"] = side_rec["wins"] / side_rec["matches"] * 100
-            side_rec["label"] = side_rec.apply(
-                lambda r: f"{int(r['wins'])}W–{int(r['matches'] - r['wins'])}L", axis=1
-            )
-
             fig_h4 = go.Figure(go.Bar(
-                x=side_rec["team_a_side"], y=side_rec["win_pct"],
-                text=side_rec["label"], textposition="outside",
-                marker_color=["#4CE87A", "#E84C4C"],
+                x=x_labels,
+                y=list(comp["avg_towers"]) + [avg_total_towers],
+                marker_color=bar_colors,
+                text=[f"{v:.2f}" for v in list(comp["avg_towers"]) + [avg_total_towers]],
+                textposition="outside",
             ))
-            fig_h4.update_layout(
-                title=f"{team_a} Win % by Side",
-                xaxis_title="Side played as", yaxis_title="Win %",
-                yaxis_range=[0, 130], showlegend=False,
-            )
+            fig_h4.update_layout(title="Avg Towers Destroyed/Game", yaxis_title="Avg / Game",
+                                  showlegend=False, xaxis_title="")
             col4.plotly_chart(fig_h4, use_container_width=True)
 
             st.divider()
@@ -676,7 +666,7 @@ with tab4:
             h2h_display = h2h[[
                 "start_time", "league_name", "patch_label",
                 "radiant_team_name", "dire_team_name", "winner",
-                "duration_mins", "total_roshan", "total_kills", "total_barracks",
+                "duration_mins", "total_roshan", "total_kills", "total_barracks", "total_towers",
             ]].copy().sort_values("start_time", ascending=False)
             h2h_display["start_time"] = h2h_display["start_time"].dt.strftime("%Y-%m-%d")
             h2h_display["duration_mins"] = h2h_display["duration_mins"].round(1)
@@ -684,6 +674,41 @@ with tab4:
                 "start_time": "Date", "league_name": "Tournament", "patch_label": "Patch",
                 "radiant_team_name": "Radiant", "dire_team_name": "Dire", "winner": "Winner",
                 "duration_mins": "Duration (min)", "total_roshan": "Roshans",
-                "total_kills": "Kills", "total_barracks": "Barracks",
+                "total_kills": "Kills", "total_barracks": "Barracks", "total_towers": "Towers",
             })
             st.dataframe(h2h_display, use_container_width=True, hide_index=True)
+
+            st.divider()
+
+            # ── Over/Under probability calculator ────────────────────────
+            st.subheader("Over/Under Calculator")
+            st.caption(f"Based on {len(h2h)} head-to-head match{'es' if len(h2h) != 1 else ''}. Enter a line to see the probability it goes over.")
+
+            metrics = [
+                ("Kills",          "total_kills",    "%.1f"),
+                ("Roshans",        "total_roshan",   "%.2f"),
+                ("Barracks",       "total_barracks", "%.2f"),
+                ("Towers",         "total_towers",   "%.2f"),
+                ("Duration (min)", "duration_mins",  "%.1f"),
+            ]
+
+            inp_cols = st.columns(len(metrics))
+            for col, (label, col_key, fmt) in zip(inp_cols, metrics):
+                avg_val = h2h[col_key].mean()
+                col.markdown(f"**{label}**")
+                col.caption(f"H2H avg: {fmt % avg_val}")
+
+            inp_cols2 = st.columns(len(metrics))
+            for col, (label, col_key, fmt) in zip(inp_cols2, metrics):
+                line = col.number_input(
+                    f"Line", min_value=0.0, value=None,
+                    placeholder="e.g. 39.5", step=0.5,
+                    key=f"ou_{col_key}", label_visibility="collapsed",
+                )
+                if line is not None:
+                    n_over  = (h2h[col_key] > line).sum()
+                    n_under = (h2h[col_key] <= line).sum()
+                    p_over  = n_over / len(h2h) * 100
+                    p_under = n_under / len(h2h) * 100
+                    col.metric("Over",  f"{p_over:.1f}%",  f"{int(n_over)}/{len(h2h)} games")
+                    col.metric("Under", f"{p_under:.1f}%", f"{int(n_under)}/{len(h2h)} games")
