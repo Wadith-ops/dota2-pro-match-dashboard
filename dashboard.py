@@ -576,13 +576,17 @@ with tab4:
 
             team_a_wins = int(h2h["team_a_won"].sum())
             team_b_wins = len(h2h) - team_a_wins
+            p_team_a = team_a_wins / len(h2h) * 100
+            p_team_b = team_b_wins / len(h2h) * 100
 
             # ── Record ───────────────────────────────────────────────────────
             st.markdown(f"### {team_a} vs {team_b}")
-            r1, r2, r3 = st.columns(3)
+            r1, r2, r3, r4, r5 = st.columns(5)
             r1.metric(f"{team_a} Wins", team_a_wins)
-            r2.metric("Matches Played", len(h2h))
-            r3.metric(f"{team_b} Wins", team_b_wins)
+            r2.metric(f"{team_a} Win %", f"{p_team_a:.1f}%")
+            r3.metric("Matches Played", len(h2h))
+            r4.metric(f"{team_b} Win %", f"{p_team_b:.1f}%")
+            r5.metric(f"{team_b} Wins", team_b_wins)
 
             st.divider()
 
