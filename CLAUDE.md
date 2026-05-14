@@ -27,26 +27,35 @@ project/
 ```
 
 ## Dashboard (dashboard.py)
-Streamlit + Plotly. Single page with global sidebar filters and 4 tabs (planned — currently Tab 1 only exists):
+Streamlit + Plotly. 3-tab layout with global sidebar filters.
 
-**Sidebar filters:** League (multi-select), Team (multi-select), Patch (multi-select), Side (Radiant/Dire/Both — single team only)
+**Sidebar filters:** League (multi-select), Team (multi-select, defaults empty = all teams), Patch (multi-select), Side (Radiant/Dire/Both — single team only)
 
 **Tabs:**
-- **Tab 1 — Roshan & Objectives**: KPI row, Roshan kill histogram, team Roshan bar chart, first kill timing, win rate charts, data table
-- **Tab 2 — Team Performance**: win rate leaderboard, Radiant vs. Dire split, head-to-head (2-team selection), objective efficiency
-- **Tab 3 — Meta Trends**: patch comparison bars, duration violin, objective trend lines, first blood timing
-- **Tab 4 — League Overview**: league stats table, tournament timeline (Gantt), league comparison chart, match distribution donut
+- **Tab 1 — Team**: KPI row (9 metrics), then Roshan / Kills / Barracks each as grouped bars by patch and by tournament, plus game length histogram and box plot by patch
+- **Tab 2 — Tournament**: stats table (all 4 metrics per tournament) + 4 comparison bar charts
+- **Tab 3 — Meta Trends**: per-patch KPI columns + 4 comparison charts (roshans, kills, barracks, game length violin)
+
+**Four core metrics across all tabs:** Roshan, Kills (hero kills/score), Barracks, Game Length
 
 **Key helpers:**
-- `load_data()` — reads CSV, parses `start_time`, adds `total_roshan` and `patch_label` columns
-- `build_team_perspective(df_hash, df)` — pivots match rows into one row per team per match (adds `team_won`, `side`, `got_first_roshan`)
+- `load_data()` — reads CSV, parses `start_time`, adds `total_roshan`, `total_kills`, `total_barracks`, `both_lost_barracks`, `patch_label`
+- `build_team_perspective(df_hash, df)` — pivots match rows into one row per team per match; adds `team_won`, `side`, `got_first_roshan`, `team_kills`, `team_barracks_killed`, plus match-level columns `total_roshan`, `total_kills`, `total_barracks`, `both_lost_barracks`
 - `@st.cache_data` used on both; `df_hash=str(len(df))` is the cache key workaround for DataFrames
+- `ANON_NAMES = {"Radiant", "Dire"}` — filtered from all team-perspective calculations
+
+**Key derived columns:**
+- `total_kills = radiant_score + dire_score`
+- `total_barracks = radiant_barracks_lost + dire_barracks_lost`
+- `both_lost_barracks = (radiant_barracks_lost >= 1) & (dire_barracks_lost >= 1)`
+- `team_barracks_killed` — barracks destroyed by the team (= opponent's barracks_lost)
 
 **Data quirks to handle in all new charts:**
 - `first_blood_time_mins < 0` — pre-game artefacts, filter before any chart using this column
 - `team_name.isin(["Radiant", "Dire"])` — default fallback names for anonymous teams, exclude from team-level analysis
 - `patch` column is a float (7.39, 7.4, 7.41) — always use `patch_label` for display (formats 7.4 → "7.40")
 - `game_mode` — 1,268 / 1,279 matches are mode 2 (Captain's Mode); note or filter for mode-sensitive stats
+- For distribution charts (histograms), use `filtered` (match-level, one row per match) not `team_filtered` to avoid duplicate values per match
 
 ## Hosting
 - Live URL: https://dota2-pro-match-dashboard-9kymmqtgrymab25ofas4oh.streamlit.app/
@@ -67,13 +76,11 @@ Split into 5 steps using `# %%` cells in VS Code:
 
 **Pipeline fixes done:** `os.chdir()` removed (replaced with `Path(__file__).parent` anchoring); `SAVE_RAW` now reads from env var (defaults `true` locally, set `false` in CI).
 
-## Updating Live Data (Current Process)
+## Updating Live Data (Manual Process)
 Run locally after tournaments, then push the updated CSV:
 1. Run `opendota_pipeline.py` — fetches only new matches (checkpoint skips already-fetched IDs)
 2. Run Step 5 to regenerate `matches_flat.csv`
 3. `git add data/matches_flat.csv` → commit → push → Streamlit Cloud redeploys automatically
-
-Full CI automation is deferred — Actions runners have no access to the local `matches.json`, so a full re-fetch would be needed on every run. Revisit with Git LFS or cloud storage when manual updates become impractical.
 
 ## Data Sources
 - API: OpenDota (https://api.opendota.com/api)
@@ -130,8 +137,8 @@ Full CI automation is deferred — Actions runners have no access to the local `
 ## Next Steps
 1. ✅ Create `.gitignore` and `requirements.txt`
 2. ✅ Set up GitHub repo and deploy to Streamlit Community Cloud
-3. Expand `dashboard.py` to 4-tab layout (Tabs 2–4 as described in PLAN.md)
-4. Pipeline automation via GitHub Actions (when next tournament starts)
+3. ✅ Expand `dashboard.py` to 3-tab layout (Team / Tournament / Meta Trends) — shipped 2026-05-02
+4. Pipeline run manually — `run_update.py` and Windows scheduled task removed (automation didn't work reliably)
 
 ## Out of Scope for Now
 - Match outcome or duration prediction modelling

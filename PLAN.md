@@ -19,41 +19,39 @@ Note: exact version pins caused a `ModuleNotFoundError` on Streamlit Cloud (Pyth
 ---
 
 ## Phase 2: Dashboard Expansion
-**Status: Needs review — edit this section before implementing**
+**Status: ✅ Complete — shipped 2026-05-02**
 
-The sections below are a first draft. Review and amend before starting a new session to implement. Change, remove, or add anything that doesn't fit what you want.
+Replaced single-page Roshan analysis with a 3-tab layout focused on four core metrics:
+**Roshan**, **Kills**, **Barracks**, **Game Length**.
 
-Expand `dashboard.py` from single-page Roshan analysis to a 4-tab layout.
-
-### Layout change
+### Layout
 - Page title: `"Dota 2 Pro Match Analysis"`
-- Wrap all content in `st.tabs()`
+- Sidebar team filter defaults to empty (all teams) — select specific teams to drill in
+- Anonymous teams ("Radiant"/"Dire") filtered from all team-perspective calculations
 
-### Tab 1 — Roshan & Objectives *(existing — no changes)*
+### Tab 1 — Team
+- 9 KPIs: avg team roshans, team 2+ roshans %, avg total roshans, match 3+ roshans %, avg team kills, avg total kills, avg team barracks, both-lost-barracks %, avg game length
+- Each metric (Roshan / Kills / Barracks) shown as grouped bars — team vs total — broken down by patch and by tournament side-by-side
+- Barracks section includes a separate "% games both teams lost barracks" chart (patch + tournament)
+- Game length: distribution histogram + box plot by patch
 
-### Tab 2 — Team Performance
-- Win rate leaderboard (≥10 games, `RdYlGn` scale, 50% reference line)
-- Radiant vs. Dire split per team (≥10 games per side)
-- Head-to-head stat block + pie chart (only shown when exactly 2 teams selected)
-- Objective efficiency: avg Roshan / tormentor / courier kills per team
+### Tab 2 — Tournament
+- Summary stats table per tournament (N matches, date range, avg roshans, 3+ roshans %, avg kills, avg barracks, both-lost %, avg duration)
+- 4 comparison bar charts: roshans / kills / barracks / avg duration
 
 ### Tab 3 — Meta Trends
-- KPI row per active patch selection (avg duration, Roshan/game, tormentors/game, radiant WR%)
-- Patch comparison grouped bar chart (7.39 / 7.40 / 7.41)
-- Duration violin plot grouped by patch
-- Objective trend line chart (patches on x-axis, Roshan / tormentors / couriers as lines)
-- First blood timing box plot by patch (filter `first_blood_time_mins > 0`)
+- Per-patch KPI columns (one column per patch, all 6 metrics)
+- 4 comparison bar charts by patch: roshans / kills / barracks / game length violin
 
-### Tab 4 — League Overview
-- League stats table (N matches, date range, avg duration, radiant WR, avg Roshan/game)
-- Tournament timeline Gantt chart (`px.timeline`)
-- League comparison chart with metric selector
-- Match distribution donut chart
+### Key derived columns added in `load_data()`
+- `total_kills = radiant_score + dire_score`
+- `total_barracks = radiant_barracks_lost + dire_barracks_lost`
+- `both_lost_barracks = (radiant_barracks_lost >= 1) & (dire_barracks_lost >= 1)`
 
-### Data gotchas to handle
-- `first_blood_time_mins < 0` → filter before any chart using this column
-- `team_name.isin(["Radiant", "Dire"])` → exclude from team-level analysis (fallback names for unknown teams)
-- `patch` is a float → always use `patch_label` column for display (formats 7.4 → "7.40")
+### `build_team_perspective()` additions
+- `team_kills` — team's own hero kills (radiant_score or dire_score depending on side)
+- `team_barracks_killed` — barracks the team destroyed (opponent's barracks_lost)
+- `total_kills`, `total_barracks`, `both_lost_barracks` — match-level columns carried through
 
 ---
 
