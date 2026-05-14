@@ -668,14 +668,17 @@ with tab4:
                 "start_time", "league_name", "patch_label",
                 "radiant_team_name", "dire_team_name", "winner",
                 "duration_mins", "total_roshan", "total_kills", "total_barracks", "total_towers",
+                "both_lost_barracks",
             ]].copy().sort_values("start_time", ascending=False)
             h2h_display["start_time"] = h2h_display["start_time"].dt.strftime("%Y-%m-%d")
             h2h_display["duration_mins"] = h2h_display["duration_mins"].round(1)
+            h2h_display["both_lost_barracks"] = h2h_display["both_lost_barracks"].map({True: "Yes", False: "No"})
             h2h_display = h2h_display.rename(columns={
                 "start_time": "Date", "league_name": "Tournament", "patch_label": "Patch",
                 "radiant_team_name": "Radiant", "dire_team_name": "Dire", "winner": "Winner",
                 "duration_mins": "Duration (min)", "total_roshan": "Roshans",
                 "total_kills": "Kills", "total_barracks": "Barracks", "total_towers": "Towers",
+                "both_lost_barracks": "Both Lost Racks",
             })
             st.dataframe(h2h_display, use_container_width=True, hide_index=True)
 
@@ -684,6 +687,11 @@ with tab4:
             # ── Over/Under probability calculator ────────────────────────
             st.subheader("Over/Under Calculator")
             st.caption(f"Based on {len(h2h)} head-to-head match{'es' if len(h2h) != 1 else ''}. Enter a line to see the probability it goes over.")
+
+            n_both_racks = int(h2h["both_lost_barracks"].sum())
+            p_both_racks = n_both_racks / len(h2h) * 100
+            st.metric("Both Teams Lost Barracks", f"{p_both_racks:.1f}%", f"{n_both_racks}/{len(h2h)} games")
+            st.divider()
 
             metrics = [
                 ("Kills",          "total_kills",    "%.1f"),
