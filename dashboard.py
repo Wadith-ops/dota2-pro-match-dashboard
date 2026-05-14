@@ -11,7 +11,7 @@ DATA_PATH = Path(__file__).parent / "data" / "matches_flat.csv"
 ANON_NAMES = {"Radiant", "Dire"}
 
 
-@st.cache_data
+@st.cache_data(ttl=1800)
 def load_data():
     df = pd.read_csv(DATA_PATH)
     df["start_time"] = pd.to_datetime(df["start_time"])
