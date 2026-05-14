@@ -113,7 +113,7 @@ if len(filtered) == 0:
 
 # ── Page ──────────────────────────────────────────────────────────────────────
 st.title("Dota 2 Pro Match Analysis")
-tab1, tab2, tab3, tab4 = st.tabs(["Team", "Tournament", "Meta Trends", "Head to Head"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["Team", "Tournament", "Meta Trends", "Head to Head", "Drilldown"])
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -731,3 +731,188 @@ with tab4:
                     p_under = n_under / len(h2h) * 100
                     col.metric("Over",  f"{p_over:.1f}%",  f"{int(n_over)}/{len(h2h)} games")
                     col.metric("Under", f"{p_under:.1f}%", f"{int(n_under)}/{len(h2h)} games")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TAB 5 — DRILLDOWN
+# ══════════════════════════════════════════════════════════════════════════════
+with tab5:
+    st.subheader("Drilldown")
+
+    all_tournaments = sorted(raw["league_name"].dropna().unique())
+    all_dd_teams = sorted(
+        set(raw["radiant_team_name"].dropna())
+        | set(raw["dire_team_name"].dropna())
+        - ANON_NAMES
+    )
+
+    dd_col1, dd_col2 = st.columns(2)
+    dd_tournaments = dd_col1.multiselect("Tournament", all_tournaments, key="dd_tourn")
+    dd_team = dd_col2.selectbox("Team", ["— all —"] + all_dd_teams, key="dd_team")
+
+    has_tournament = len(dd_tournaments) > 0
+    has_team = dd_team != "— all —"
+
+    if not has_tournament and not has_team:
+        st.info("Select a tournament and/or team to see the drilldown.")
+    else:
+        dd = raw.copy()
+        if has_tournament:
+            dd = dd[dd["league_name"].isin(dd_tournaments)]
+        if has_team:
+            dd = dd[
+                (dd["radiant_team_name"] == dd_team)
+                | (dd["dire_team_name"] == dd_team)
+            ]
+
+        if len(dd) == 0:
+            st.warning("No matches found with the current filters.")
+        else:
+            dd = dd.copy()
+            dd["winner"] = dd.apply(
+                lambda r: r["radiant_team_name"] if r["radiant_win"] else r["dire_team_name"], axis=1
+            )
+
+            # ── Summary KPIs ──────────────────────────────────────────────
+            if has_team:
+                dd["team_won"] = dd["winner"] == dd_team
+                team_wins   = int(dd["team_won"].sum())
+                team_losses = len(dd) - team_wins
+                p_win       = team_wins / len(dd) * 100
+                k1, k2, k3, k4 = st.columns(4)
+                k1.metric("Matches", len(dd))
+                k2.metric(f"{dd_team} Wins", team_wins)
+                k3.metric(f"{dd_team} Losses", team_losses)
+                k4.metric(f"{dd_team} Win %", f"{p_win:.1f}%")
+            else:
+                st.metric("Matches Found", len(dd))
+
+            st.divider()
+
+            # ── Avg stats bar charts ──────────────────────────────────────
+            avg_total_rosh   = dd["total_roshan"].mean()
+            avg_total_kills  = dd["total_kills"].mean()
+            avg_total_barr   = dd["total_barracks"].mean()
+            avg_total_towers = dd["total_towers"].mean()
+
+            if has_team:
+                dd_team_persp = build_team_perspective("dd_" + dd_team + str(len(dd)), dd)
+                dd_team_persp = dd_team_persp[dd_team_persp["team_name"] == dd_team]
+                avg_team_rosh   = dd_team_persp["team_roshan_kills"].mean()
+                avg_team_kills  = dd_team_persp["team_kills"].mean()
+                avg_team_barr   = dd_team_persp["team_barracks_killed"].mean()
+                avg_team_towers = dd_team_persp["team_towers_killed"].mean()
+                x_labels  = [dd_team, "Match Total"]
+                bar_colors = ["#4C9BE8", "#AAAAAA"]
+                rosh_y   = [avg_team_rosh,   avg_total_rosh]
+                kills_y  = [avg_team_kills,  avg_total_kills]
+                barr_y   = [avg_team_barr,   avg_total_barr]
+                towers_y = [avg_team_towers, avg_total_towers]
+            else:
+                x_labels  = ["Match Total"]
+                bar_colors = ["#AAAAAA"]
+                rosh_y   = [avg_total_rosh]
+                kills_y  = [avg_total_kills]
+                barr_y   = [avg_total_barr]
+                towers_y = [avg_total_towers]
+
+            dc1, dc2 = st.columns(2)
+            dc3, dc4 = st.columns(2)
+
+            fig_d1 = go.Figure(go.Bar(
+                x=x_labels, y=rosh_y, marker_color=bar_colors,
+                text=[f"{v:.2f}" for v in rosh_y], textposition="outside",
+            ))
+            fig_d1.update_layout(title="Avg Roshans/Game", yaxis_title="Avg / Game",
+                                  showlegend=False, xaxis_title="")
+            dc1.plotly_chart(fig_d1, use_container_width=True)
+
+            fig_d2 = go.Figure(go.Bar(
+                x=x_labels, y=kills_y, marker_color=bar_colors,
+                text=[f"{v:.1f}" for v in kills_y], textposition="outside",
+            ))
+            fig_d2.update_layout(title="Avg Kills/Game", yaxis_title="Avg / Game",
+                                  showlegend=False, xaxis_title="")
+            dc2.plotly_chart(fig_d2, use_container_width=True)
+
+            fig_d3 = go.Figure(go.Bar(
+                x=x_labels, y=barr_y, marker_color=bar_colors,
+                text=[f"{v:.2f}" for v in barr_y], textposition="outside",
+            ))
+            fig_d3.update_layout(title="Avg Barracks Destroyed/Game", yaxis_title="Avg / Game",
+                                  showlegend=False, xaxis_title="")
+            dc3.plotly_chart(fig_d3, use_container_width=True)
+
+            fig_d4 = go.Figure(go.Bar(
+                x=x_labels, y=towers_y, marker_color=bar_colors,
+                text=[f"{v:.2f}" for v in towers_y], textposition="outside",
+            ))
+            fig_d4.update_layout(title="Avg Towers Destroyed/Game", yaxis_title="Avg / Game",
+                                  showlegend=False, xaxis_title="")
+            dc4.plotly_chart(fig_d4, use_container_width=True)
+
+            st.divider()
+
+            # ── Match history table ───────────────────────────────────────
+            st.subheader("Match History")
+            dd_display = dd[[
+                "start_time", "league_name", "patch_label",
+                "radiant_team_name", "dire_team_name", "winner",
+                "duration_mins", "total_roshan", "total_kills", "total_barracks", "total_towers",
+                "both_lost_barracks", "both_teams_roshan",
+            ]].copy().sort_values("start_time", ascending=False)
+            dd_display["start_time"] = dd_display["start_time"].dt.strftime("%Y-%m-%d")
+            dd_display["duration_mins"] = dd_display["duration_mins"].round(1)
+            dd_display["both_lost_barracks"] = dd_display["both_lost_barracks"].map({True: "Yes", False: "No"})
+            dd_display["both_teams_roshan"]  = dd_display["both_teams_roshan"].map({True: "Yes", False: "No"})
+            dd_display = dd_display.rename(columns={
+                "start_time": "Date", "league_name": "Tournament", "patch_label": "Patch",
+                "radiant_team_name": "Radiant", "dire_team_name": "Dire", "winner": "Winner",
+                "duration_mins": "Duration (min)", "total_roshan": "Roshans",
+                "total_kills": "Kills", "total_barracks": "Barracks", "total_towers": "Towers",
+                "both_lost_barracks": "Both Lost Racks", "both_teams_roshan": "Both Slew Rosh",
+            })
+            st.dataframe(dd_display, use_container_width=True, hide_index=True)
+
+            st.divider()
+
+            # ── Over/Under probability calculator ─────────────────────────
+            st.subheader("Over/Under Calculator")
+            st.caption(f"Based on {len(dd)} match{'es' if len(dd) != 1 else ''}. Enter a line to see the probability it goes over.")
+
+            n_both_racks = int(dd["both_lost_barracks"].sum())
+            n_both_rosh  = int(dd["both_teams_roshan"].sum())
+            p_both_racks = n_both_racks / len(dd) * 100
+            p_both_rosh  = n_both_rosh  / len(dd) * 100
+            prob_col1, prob_col2 = st.columns(2)
+            prob_col1.metric("Both Teams Lost Barracks", f"{p_both_racks:.1f}%", f"{n_both_racks}/{len(dd)} games")
+            prob_col2.metric("Both Teams Slew Roshan",   f"{p_both_rosh:.1f}%",  f"{n_both_rosh}/{len(dd)} games")
+            st.divider()
+
+            dd_metrics = [
+                ("Kills",          "total_kills",    "%.1f"),
+                ("Roshans",        "total_roshan",   "%.2f"),
+                ("Barracks",       "total_barracks", "%.2f"),
+                ("Towers",         "total_towers",   "%.2f"),
+                ("Duration (min)", "duration_mins",  "%.1f"),
+            ]
+
+            dd_inp1 = st.columns(len(dd_metrics))
+            for col, (label, col_key, fmt) in zip(dd_inp1, dd_metrics):
+                col.markdown(f"**{label}**")
+                col.caption(f"Avg: {fmt % dd[col_key].mean()}")
+
+            dd_inp2 = st.columns(len(dd_metrics))
+            for col, (label, col_key, fmt) in zip(dd_inp2, dd_metrics):
+                line = col.number_input(
+                    "Line", min_value=0.0, value=None,
+                    placeholder="e.g. 39.5", step=0.5,
+                    key=f"dd_ou_{col_key}", label_visibility="collapsed",
+                )
+                if line is not None:
+                    n_over  = (dd[col_key] > line).sum()
+                    n_under = (dd[col_key] <= line).sum()
+                    p_over  = n_over / len(dd) * 100
+                    p_under = n_under / len(dd) * 100
+                    col.metric("Over",  f"{p_over:.1f}%",  f"{int(n_over)}/{len(dd)} games")
+                    col.metric("Under", f"{p_under:.1f}%", f"{int(n_under)}/{len(dd)} games")
