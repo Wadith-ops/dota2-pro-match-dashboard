@@ -21,6 +21,7 @@ def load_data():
     df["total_barracks"] = df["radiant_barracks_lost"] + df["dire_barracks_lost"]
     df["total_towers"] = df["radiant_towers_lost"] + df["dire_towers_lost"]
     df["both_lost_barracks"] = (df["radiant_barracks_lost"] >= 1) & (df["dire_barracks_lost"] >= 1)
+    df["both_teams_roshan"] = (df["radiant_roshan_kills"] >= 1) & (df["dire_roshan_kills"] >= 1)
     df["patch_label"] = df["patch"].apply(lambda x: f"{x:.2f}" if pd.notna(x) else "Unknown")
     return df
 
@@ -30,7 +31,7 @@ def build_team_perspective(df_hash: str, df: pd.DataFrame) -> pd.DataFrame:
     base_cols = [
         "match_id", "league_name", "patch_label", "start_time",
         "duration_mins", "radiant_win", "first_roshan_team", "first_roshan_time_mins",
-        "total_roshan", "total_kills", "total_barracks", "total_towers", "both_lost_barracks",
+        "total_roshan", "total_kills", "total_barracks", "total_towers", "both_lost_barracks", "both_teams_roshan",
     ]
     radiant = df[base_cols].copy()
     radiant["team_name"] = df["radiant_team_name"].values
@@ -672,17 +673,18 @@ with tab4:
                 "start_time", "league_name", "patch_label",
                 "radiant_team_name", "dire_team_name", "winner",
                 "duration_mins", "total_roshan", "total_kills", "total_barracks", "total_towers",
-                "both_lost_barracks",
+                "both_lost_barracks", "both_teams_roshan",
             ]].copy().sort_values("start_time", ascending=False)
             h2h_display["start_time"] = h2h_display["start_time"].dt.strftime("%Y-%m-%d")
             h2h_display["duration_mins"] = h2h_display["duration_mins"].round(1)
             h2h_display["both_lost_barracks"] = h2h_display["both_lost_barracks"].map({True: "Yes", False: "No"})
+            h2h_display["both_teams_roshan"] = h2h_display["both_teams_roshan"].map({True: "Yes", False: "No"})
             h2h_display = h2h_display.rename(columns={
                 "start_time": "Date", "league_name": "Tournament", "patch_label": "Patch",
                 "radiant_team_name": "Radiant", "dire_team_name": "Dire", "winner": "Winner",
                 "duration_mins": "Duration (min)", "total_roshan": "Roshans",
                 "total_kills": "Kills", "total_barracks": "Barracks", "total_towers": "Towers",
-                "both_lost_barracks": "Both Lost Racks",
+                "both_lost_barracks": "Both Lost Racks", "both_teams_roshan": "Both Slew Rosh",
             })
             st.dataframe(h2h_display, use_container_width=True, hide_index=True)
 
@@ -694,7 +696,11 @@ with tab4:
 
             n_both_racks = int(h2h["both_lost_barracks"].sum())
             p_both_racks = n_both_racks / len(h2h) * 100
-            st.metric("Both Teams Lost Barracks", f"{p_both_racks:.1f}%", f"{n_both_racks}/{len(h2h)} games")
+            n_both_rosh = int(h2h["both_teams_roshan"].sum())
+            p_both_rosh = n_both_rosh / len(h2h) * 100
+            prob_col1, prob_col2 = st.columns(2)
+            prob_col1.metric("Both Teams Lost Barracks", f"{p_both_racks:.1f}%", f"{n_both_racks}/{len(h2h)} games")
+            prob_col2.metric("Both Teams Slew Roshan", f"{p_both_rosh:.1f}%", f"{n_both_rosh}/{len(h2h)} games")
             st.divider()
 
             metrics = [
