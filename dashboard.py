@@ -584,9 +584,9 @@ with tab4:
             r1, r2, r3, r4, r5 = st.columns(5)
             r1.metric("Matches Played", len(h2h))
             r2.metric(f"{team_a} Wins", team_a_wins)
-            r3.metric(f"{team_a} Win %", f"{p_team_a:.1f}%")
-            r4.metric(f"{team_b} Win %", f"{p_team_b:.1f}%")
-            r5.metric(f"{team_b} Wins", team_b_wins)
+            r3.metric(f"{team_b} Wins", team_b_wins)
+            r4.metric(f"{team_a} Win %", f"{p_team_a:.1f}%")
+            r5.metric(f"{team_b} Win %", f"{p_team_b:.1f}%")
 
             st.divider()
 
