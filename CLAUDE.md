@@ -31,6 +31,8 @@ Streamlit + Plotly. 5-tab layout with global sidebar filters.
 
 **Sidebar filters:** League (multi-select), Team (multi-select, defaults empty = all teams), Patch (multi-select), Side (Radiant/Dire/Both — single team only)
 
+**Tournament sort order:** tournaments are sorted by first match date descending (latest at top) in both the sidebar filter and the Drilldown tab — not alphabetically. Computed via `league_start = raw.groupby("league_name")["start_time"].min()` at startup and reused in both places.
+
 **Tabs:**
 - **Tab 1 — Team**: KPI row (9 metrics), then Roshan / Kills / Barracks each as grouped bars by patch and by tournament, plus game length histogram and box plot by patch
 - **Tab 2 — Tournament**: stats table (all 4 metrics per tournament) + 4 comparison bar charts
