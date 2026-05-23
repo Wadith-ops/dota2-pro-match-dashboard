@@ -62,7 +62,8 @@ team_persp_full = build_team_perspective(str(len(raw)), raw)
 # ── Sidebar ──────────────────────────────────────────────────────────────────
 st.sidebar.title("Filters")
 
-all_leagues = sorted(raw["league_name"].dropna().unique())
+league_start = raw.groupby("league_name")["start_time"].min()
+all_leagues = league_start.sort_values(ascending=False).index.tolist()
 selected_leagues = st.sidebar.multiselect("Tournament / League", all_leagues, default=all_leagues)
 league_filtered = raw[raw["league_name"].isin(selected_leagues)] if selected_leagues else raw
 
@@ -739,7 +740,7 @@ with tab4:
 with tab5:
     st.subheader("Drilldown")
 
-    all_tournaments = sorted(raw["league_name"].dropna().unique())
+    all_tournaments = league_start.sort_values(ascending=False).index.tolist()
     all_dd_teams = sorted(
         set(raw["radiant_team_name"].dropna())
         | set(raw["dire_team_name"].dropna())
