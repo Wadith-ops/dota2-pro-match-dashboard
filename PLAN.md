@@ -55,7 +55,29 @@ Replaced single-page Roshan analysis with a 3-tab layout focused on four core me
 
 ---
 
-## Phase 3: Pipeline Automation
+## Phase 3: Trend Views for Betting Context
+**Status: Planned — not yet started**
+
+### Problem
+The current Team, Tournament, and Meta Trends tabs show static aggregates per tournament/patch. For a bettor, the most dangerous moment is the **start of a new tournament** — minimal data, possible new patch, uncertain meta. What's missing is **directional context**: is the meta getting faster or slower? Are kills trending up? How volatile is a patch transition?
+
+### Proposed changes
+
+**Tournament tab → chronological trend lines**
+Replace bar charts with line charts plotting each metric (kills, duration, roshans, barracks) per tournament in chronological order. Immediately shows whether stats are trending heading into a new tournament, so bettors can set more informed over/under expectations rather than anchoring on all-time averages.
+
+**Meta Trends tab → patch transition view**
+Split each patch into early games (first ~20%) vs late games (last ~20%) and compare stats. Quantifies how much the meta settles within a patch — if early games historically show higher variance, that's a concrete reason to adjust bets in week 1 of a new tournament.
+
+**Team tab → per-team trend line across tournaments**
+Show each team's win rate, avg kills, avg duration per tournament over time. Useful for spotting teams improving or declining across the season rather than just their all-time aggregate.
+
+### Key insight
+These changes don't add new data — they reframe existing aggregates as **time series** to show direction, not just level. A bettor needs to know if 42 avg kills is going up or down, not just that it averaged 42.
+
+---
+
+## Phase 4: Pipeline Automation
 **Status: Deferred — manual update process chosen for now**
 
 ### Chosen approach: Option A (manual local runs)
