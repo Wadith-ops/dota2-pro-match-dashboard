@@ -5,6 +5,7 @@ import requests
 import time
 import json
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 import pandas as pd
 
@@ -24,7 +25,10 @@ ALL_LEAGUES = {
     19422: "ESL One Birmingham 2026",
     19543: "PGL Wallachia 2026 Season 8",
     19696: "DreamLeague Season 29",
-    19101: "Blast Slam VII"
+    19101: "Blast Slam VII",
+    19785: "Esports World Cup 2026",
+    20009: "1win Essence II",
+    19719: "The International 2026"
 }
 
 # Only fetch the below leagues for this run
@@ -238,7 +242,10 @@ def run_pipeline():
         print(f"  Fetching match IDs for league {league_id}...")
         data = fetch_url(url)
 
-        if not data:
+        # `fetch_url` returns None on failure and a list on success, so an
+        # announced-but-not-yet-started league returns []. Testing truthiness
+        # would report that empty list as a failed fetch.
+        if data is None:
             print(f"  Failed to fetch match IDs for league {league_id}")
             print()
             continue
@@ -296,6 +303,42 @@ run_pipeline()
 # # Step 5 - Flatten & Export to CSV
 
 CSV_FILE = os.path.join(DATA_DIR, "matches_flat.csv")
+META_FILE = os.path.join(DATA_DIR, "meta.json")
+
+
+def write_meta(df):
+    """
+    Records what the dataset currently holds, so the dashboard can state its own
+    coverage rather than leaving a gap to be discovered two months later.
+
+    latest_match_date is the staleness signal that matters: a run which fetches
+    nothing still refreshes generated_at, so only the match date reveals a gap.
+
+    excluded_count is null, not 0, until suspect-match handling lands (see
+    tier1-pipeline-automation/05). Null means "not yet computed"; 0 would mean
+    "computed, none found" — and five suspect matches are in the dataset today,
+    so writing 0 would state something false. The field is present from the
+    start so the dashboard does not need changing when 05 fills it in.
+    """
+    latest = df["start_time"].max()
+
+    meta = {
+        "generated_at"     : datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "match_count"      : int(len(df)),
+        "tournament_count" : int(df["league_name"].nunique()),
+        "excluded_count"   : None,
+        "latest_match_date": latest.strftime("%Y-%m-%d") if pd.notna(latest) else None,
+    }
+
+    with open(META_FILE, "w") as f:
+        json.dump(meta, f, indent=2)
+
+    print(f"Meta saved to {META_FILE}")
+    for key, value in meta.items():
+        print(f"  {key}: {value}")
+
+    return meta
+
 
 def flatten_objectives(objectives):
     """
@@ -466,6 +509,9 @@ def build_dataframe():
 
     # ── Save to CSV ───────────────────────────────────────────
     df.to_csv(CSV_FILE, index=False)
+
+    # ── Record coverage alongside it ──────────────────────────
+    write_meta(df)
 
     print(f"CSV saved to {CSV_FILE}")
     print(f"DataFrame shape: {df.shape[0]} rows x {df.shape[1]} columns")

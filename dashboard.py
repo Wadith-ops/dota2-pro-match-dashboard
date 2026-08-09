@@ -1,4 +1,5 @@
 # data: 2026-06-08
+import json
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -8,6 +9,7 @@ from pathlib import Path
 st.set_page_config(page_title="Dota 2 Pro Match Analysis", layout="wide")
 
 DATA_PATH = Path(__file__).parent / "data" / "matches_flat.csv"
+META_PATH = Path(__file__).parent / "data" / "meta.json"
 
 ANON_NAMES = {"Radiant", "Dire"}
 
@@ -24,6 +26,65 @@ def load_data():
     df["both_teams_roshan"] = (df["radiant_roshan_kills"] >= 1) & (df["dire_roshan_kills"] >= 1)
     df["patch_label"] = df["patch"].apply(lambda x: f"{x:.2f}" if pd.notna(x) else "Unknown")
     return df
+
+
+@st.cache_data(ttl=1800)
+def load_meta() -> dict:
+    """
+    Reads data/meta.json. Returns {} when it is absent or malformed, so the
+    coverage line degrades to CSV-derived figures instead of failing the page.
+    """
+    try:
+        meta = json.loads(META_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return meta if isinstance(meta, dict) else {}
+
+
+def format_date(value) -> str | None:
+    """Renders a date as '5 Aug 2026'. %-d is not portable to Windows, so the day
+    is formatted separately."""
+    stamp = pd.to_datetime(value, errors="coerce", utc=True)
+    if pd.isna(stamp):
+        return None
+    return f"{stamp.day} {stamp:%b %Y}"
+
+
+def coverage_line(df: pd.DataFrame, meta: dict) -> str:
+    """
+    States what the dataset holds, at the point of use.
+
+    Match and tournament counts are derived from the CSV actually loaded, never
+    from meta.json, so the line can never advertise coverage the page does not
+    have. Only what the CSV cannot supply — when the pipeline last ran, and how
+    many matches were excluded — is read from meta.
+    """
+    parts = []
+
+    # "Data updated", not "Data as of": generated_at only reaches production when
+    # the CSV changes, so it marks the last run that changed data, not the last
+    # run. `latest match` is the staleness signal.
+    generated = format_date(meta.get("generated_at"))
+    if generated:
+        parts.append(f"Data updated **{generated}**")
+
+    latest = format_date(df["start_time"].max())
+    if latest:
+        parts.append(f"latest match **{latest}**")
+
+    parts.append(f"**{len(df):,}** matches")
+    parts.append(f"**{df['league_name'].nunique()}** tournaments")
+
+    # Rendered only once the count is real. Suspect-match exclusion is not
+    # implemented yet (tier1-pipeline-automation/05), so meta carries null and
+    # the clause stays off — claiming "0 excluded" while five suspect matches
+    # skew every average would be a false assurance, which is worse than silence
+    # for someone reading this to price a bet.
+    excluded = meta.get("excluded_count")
+    if isinstance(excluded, int) and not isinstance(excluded, bool) and excluded >= 0:
+        parts.append(f"**{excluded}** excluded for missing data")
+
+    return " · ".join(parts)
 
 
 @st.cache_data
@@ -108,12 +169,18 @@ if selected_patches:
 
 st.sidebar.metric("Matches selected", len(filtered))
 
+# ── Page ──────────────────────────────────────────────────────────────────────
+st.title("Dota 2 Pro Match Analysis")
+
+# Coverage describes the whole dataset, not the current selection, so it renders
+# before the empty-filter guard below — the moment the page is otherwise blank is
+# exactly when "what is actually in here?" needs answering.
+st.caption(coverage_line(raw, load_meta()))
+
 if len(filtered) == 0:
     st.warning("No matches match the current filters. Try broadening your selection.")
     st.stop()
 
-# ── Page ──────────────────────────────────────────────────────────────────────
-st.title("Dota 2 Pro Match Analysis")
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["Team", "Tournament", "Meta Trends", "Head to Head", "Drilldown"])
 
 

@@ -27,8 +27,13 @@ text = re.sub(r"^# data: \d{4}-\d{2}-\d{2}", f"# data: {DATE}", text, flags=re.M
 DASHBOARD.write_text(text, encoding="utf-8")
 print(f"Bumped dashboard.py date to {DATE}")
 
-# Commit and push
-run(["git", "add", "data/matches_flat.csv", "dashboard.py"])
+# Commit and push.
+# Only stage what exists: `git add` exits 128 on a pathspec matching no file,
+# which would abort the push. build_dataframe() writes neither the CSV nor
+# meta.json when there is no raw store to flatten.
+DEPLOYED = ["data/matches_flat.csv", "data/meta.json", "dashboard.py"]
+present = [p for p in DEPLOYED if (HERE / p).exists()]
+run(["git", "add", *present])
 run(["git", "commit", "-m", f"data: update matches ({DATE})"])
 result = run(["git", "push", "origin", "master"])
 print("Pushed — Streamlit Cloud will redeploy automatically.")

@@ -24,7 +24,13 @@ The consequence: a distribution chart (histogram, box, violin) over a match-leve
 
 **Anonymous team** — a match where OpenDota has no team name and falls back to the literal strings `"Radiant"` / `"Dire"`. These are not teams. They are excluded from every team-level calculation via `ANON_NAMES`, but their matches remain valid for match-level metrics.
 
-**Tier 1 league** — the invite-level circuit. This project tracks a fixed, hand-curated set (`ALL_LEAGUES` in the pipeline), not everything OpenDota classes as professional. Called a **tournament** in the dashboard UI; *league* is the API's word and the column name (`league_name`). Both refer to the same thing.
+**Tier 1 league** — the invite-level circuit, **as defined by [Liquipedia's Tier 1 Tournaments list](https://liquipedia.net/dota2/Tier_1_Tournaments)**. Scope is set by that external authority, not by OpenDota's `tier` field — which classes every league here as `professional`, alongside 2,468 others — and not by organiser name, which cannot separate DreamLeague Season 29 from DreamLeague Division 2 Season 3. Qualifiers, Division 2 circuits and regional events are excluded. See ADR-0001.
+
+Called a **tournament** in the dashboard UI; *league* is the API's word and the column name (`league_name`). Both refer to the same thing.
+
+**Ledger** — `leagues.json`, the record of every known league and its verdict: `active`, `rejected` or `pending`. It replaces the hardcoded `ALL_LEAGUES` dict so that an excluded league is *visibly excluded* rather than merely absent — the distinction whose absence hid the Esports World Cup for two months. Verdicts are reversible. (Lands in `tier1-pipeline-automation/06`.)
+
+**Known gap** — a Tier 1 event on Liquipedia's list with no matching OpenDota league. Distinct from a rejected league: a gap is coverage the project *wants* and does not yet have.
 
 ### Time
 
@@ -44,7 +50,7 @@ The consequence: a distribution chart (histogram, box, violin) over a match-leve
 
 **Tower** — recorded the same way, `radiant_towers_lost` / `dire_towers_lost`: buildings destroyed, framed as losses by the owner.
 
-**First blood** — the first hero kill of the match. `first_blood_time_mins` can be **negative** — a pre-horn artefact of the API — and must be filtered before use.
+**First blood** — the first hero kill of the match. `first_blood_time_mins` can be **negative, and negative values are valid data**: the match clock starts at zero at the horn, and teams contest runes and wards in the seconds before it. All 155 negative values in the dataset fall between −0.9 and −0.1 minutes, none below −1.0 — the pre-horn window exactly. Do not filter them. See ADR-0003, which records 133 of 1,605 as measured when it was written.
 
 **Courier kill** — a killed courier. Per match, not per side.
 
@@ -68,9 +74,17 @@ The consequence: a distribution chart (histogram, box, violin) over a match-leve
 
 **Checkpoint** — `checkpoints/fetched_matches.json`, the set of match IDs already fetched. Match-level only: league match-ID lists are always re-fetched so new matches are detected.
 
-**Raw match** — the full untouched API response, stored in `data/matches.json`. Local only. It holds hero and player data not yet extracted.
+**Raw match** — the full untouched API response, roughly 386 KB per match, of which `players` is 87% and `objectives` — the only part the dashboard reads — is 1.4%. Historically stored in `data/matches.json`; that store is being retired in favour of the Standard record, with the raw sink retained as a **disabled seam** so full-fidelity capture can be switched back on for modelling. Never committed.
+
+**Standard record** — the modelling artifact: roughly 20 KB per match, retaining objectives in full, picks and bans, per-player aggregates, teamfight summaries, benchmarks, and the gold and XP advantage curves, while discarding per-player timeseries. Committed and versioned. Nothing consumes it yet — it accumulates so that modelling does not require a full re-fetch later. See ADR-0002. (Lands in `tier1-pipeline-automation/10`.)
 
 **Flat CSV** — `data/matches_flat.csv`, the flattened match-row export. This is the only data the deployed dashboard reads.
+
+**Suspect match** — a match whose objective data is missing or implausible: empty `objectives`, zero towers lost by both sides in a match over 20 minutes, or a combined hero kill score of zero. Suspect matches are flagged, **excluded from every average**, and kept visible in match history. Five exist today, including a 96-minute game recorded as zero towers. A zero that means "unknown" corrupts every average it touches. (Lands in `tier1-pipeline-automation/05`.)
+
+**Coverage** — what the dataset currently contains: generation timestamp, match count, tournament count, excluded count, and the date of the most recent match. Written to `data/meta.json` and shown on the dashboard, so a gap is visible at the point of use rather than discovered later.
+
+The **latest match date** is the load-bearing field. A run that fetches nothing still refreshes the generation timestamp, so generation time alone cannot reveal a gap — only the match date can. The dashboard shows both.
 
 ## Leagues covered
 
@@ -88,6 +102,13 @@ The consequence: a distribution chart (histogram, box, violin) over a match-leve
 | 19543 | PGL Wallachia 2026 Season 8 |
 | 19696 | DreamLeague Season 29       |
 | 19101 | Blast Slam VII              |
+| 19785 | Esports World Cup 2026      |
+| 20009 | 1win Essence II             |
+| 19719 | The International 2026      |
+
+The International 2026 is configured but holds **zero matches** — it starts 13 Aug 2026, and its matches are picked up on the first daily run after that. A configured league with no matches is normal, not a fault.
+
+This table is superseded by the ledger (`leagues.json`) once `tier1-pipeline-automation/06` lands.
 
 Tournaments are ordered by **first match date, descending** — latest first — everywhere they are listed. Never alphabetically.
 
@@ -120,5 +141,6 @@ Tournaments are ordered by **first match date, descending** — latest first —
 - One row per match in `matches_flat.csv`; exactly two team-perspective rows per match.
 - `total_kills = radiant_score + dire_score` — always recomputed, never read from the API.
 - A team-perspective row's `team_barracks_killed` equals the *opponent's* `*_barracks_lost`.
-- `game_mode` is overwhelmingly `2` (Captain's Mode). Any metric sensitive to draft format should filter to it or state that it doesn't.
-- `first_blood_time_mins < 0` is invalid data, not a fast first blood.
+- `game_mode` is overwhelmingly `2` (Captain's Mode); 12 matches are mode 1. Matches are **flagged, never dropped**, for their game mode. Any metric sensitive to draft format should filter to mode 2 or state that it doesn't.
+- `first_blood_time_mins < 0` is **valid data** — a pre-horn kill, not an artefact. See ADR-0003.
+- A suspect match is excluded from averages but present in match history. Absence from a chart never means absence from the record. **Not yet implemented** — this is the target state, and lands in `tier1-pipeline-automation/05`. Today the five suspect matches are still in every average, and `meta.json` carries `excluded_count: null` to say so rather than claiming zero.
