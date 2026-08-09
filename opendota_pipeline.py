@@ -1,4 +1,14 @@
+"""
+The pipeline shell: everything the pure core deliberately does not do.
 
+Network calls, checkpoint files, the raw sink and the CSV export live here.
+The transformations they feed live in `core.py` and are tested against recorded
+payloads in `tests/`.
+
+Importing this module does nothing. `main()` runs the pipeline, and only the
+`__main__` guard calls it — so `import opendota_pipeline` cannot start a
+multi-hour API run, and the tests can import the transforms without one.
+"""
 # %%
 # # Import libraries
 import requests
@@ -8,6 +18,8 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 import pandas as pd
+
+from core import build_rows, coverage_meta
 
 # %%
 # # Step 1 - Configuration and Setup
@@ -32,7 +44,7 @@ ALL_LEAGUES = {
 }
 
 # Only fetch the below leagues for this run
-ACTIVE_LEAGUES = list(ALL_LEAGUES.keys()) 
+ACTIVE_LEAGUES = list(ALL_LEAGUES.keys())
 
 #File paths
 _HERE = Path(__file__).parent
@@ -41,6 +53,8 @@ CHECKPOINT_DIR = str(_HERE / "checkpoints")
 
 MATCHES_FILE = os.path.join(DATA_DIR, "matches.json")
 MATCH_CHECKPOINT = os.path.join(CHECKPOINT_DIR, "fetched_matches.json")
+CSV_FILE = os.path.join(DATA_DIR, "matches_flat.csv")
+META_FILE = os.path.join(DATA_DIR, "meta.json")
 
 # API Settings
 BASE_URL = "https://api.opendota.com/api"
@@ -50,7 +64,7 @@ DELAY_SECONDS = 1.0
 # Fields to always extract
 CORE_FIELDS = [
     "match_id",
-    "duration", 
+    "duration",
     "patch",
     "radiant_win",
     "start_time",
@@ -63,15 +77,21 @@ CORE_FIELDS = [
 # Set this to True to save the full raw response instead (override with env var SAVE_RAW=false)
 SAVE_RAW = os.getenv("SAVE_RAW", "true").lower() == "true"
 
-# Create directories (if not exist)
-os.makedirs(DATA_DIR, exist_ok=True)
-os.makedirs(CHECKPOINT_DIR, exist_ok=True)
+
+def ensure_directories():
+    """
+    Creates the data and checkpoint directories. Called from main(), not at
+    import — importing this module must not write to disk.
+    """
+    os.makedirs(DATA_DIR, exist_ok=True)
+    os.makedirs(CHECKPOINT_DIR, exist_ok=True)
+
 
 # ── Fetch patch mapping from OpenDota constants ───────────────
 def get_patch_map():
     """
     Fetches the official patch ID to version name mapping from OpenDota.
-    Returns a dictionary like {58: "7.38", 59: "7.39", ...}
+    Returns a dictionary like {58: "7.39", 59: "7.40", ...}
     Falls back to empty dict if the call fails.
     """
     url = f"{BASE_URL}/constants/patch"
@@ -86,11 +106,6 @@ def get_patch_map():
     except Exception as e:
         print(f"  Error fetching patch constants: {e}")
         return {}
-
-PATCH_MAP = get_patch_map()
-print(f"Patch map loaded: {PATCH_MAP}")
-
-print("Config loaded. Directories ready.")
 
 # %%
 # # Step 2 - API Fetcher
@@ -110,15 +125,13 @@ def fetch_url(url):
         else:
             print (f" Bad response {response.status_code} for URL: {url}")
             return None
-        
+
     except Exception as e:
         print(f" Error fetching {url}: {e}")
         return None
-    
-print ("API Fetcher ready.")
 
 # %%
-# # Step 3a - Get League Match IDs
+# # Step 3a - Checkpoints
 
 def load_checkpoint(filepath):
     """
@@ -136,31 +149,6 @@ def save_checkpoint(filepath, data):
     """
     with open(filepath, "w") as f:
         json.dump(list(data), f)
-
-def get_league_match_ids(league_id, completed_leagues):
-    """
-    Fetches all match IDs for a given league.
-    Skips the API call if the league is already in the completed_leagues checkpoint.
-    Returns a list of match IDs, or empty list if skipped/failed.
-    """
-    if league_id in completed_leagues:
-        print(f"  Skipping league {league_id} — already completed")
-        return []
-    
-    url = f"{BASE_URL}/leagues/{league_id}/matches"
-    print(f"  Fetching match IDs for league {league_id}...")
-    
-    data = fetch_url(url)
-    
-    if data is None:
-        print(f"  Failed to fetch match IDs for league {league_id}")
-        return []
-    
-    match_ids = [match["match_id"] for match in data]
-    print(f"  Found {len(match_ids)} matches for league {league_id}")
-    return match_ids
-
-print("League match ID fetcher ready.")
 
 # %%
 # # Step 3b - Get Match Details
@@ -188,8 +176,6 @@ def get_match_detail(match_id, fetched_matches):
         return data
     else:
         return {field: data.get(field) for field in CORE_FIELDS}
-
-print("Match detail fetcher ready.")
 
 # %%
 # # Step 4 - Main Loop + Save
@@ -295,40 +281,15 @@ def run_pipeline():
     print(f"Pipeline complete. Total matches in file: {len(all_matches)}")
     print("=" * 60)
 
-
-# ── Run the pipeline ──────────────────────────────────────────
-run_pipeline()
-
 # %%
 # # Step 5 - Flatten & Export to CSV
 
-CSV_FILE = os.path.join(DATA_DIR, "matches_flat.csv")
-META_FILE = os.path.join(DATA_DIR, "meta.json")
-
-
-def write_meta(df):
+def write_meta(rows):
     """
-    Records what the dataset currently holds, so the dashboard can state its own
-    coverage rather than leaving a gap to be discovered two months later.
-
-    latest_match_date is the staleness signal that matters: a run which fetches
-    nothing still refreshes generated_at, so only the match date reveals a gap.
-
-    excluded_count is null, not 0, until suspect-match handling lands (see
-    tier1-pipeline-automation/05). Null means "not yet computed"; 0 would mean
-    "computed, none found" — and five suspect matches are in the dataset today,
-    so writing 0 would state something false. The field is present from the
-    start so the dashboard does not need changing when 05 fills it in.
+    Writes the coverage record the dashboard reads. The figures themselves are
+    computed by core.coverage_meta; this only supplies the clock and the file.
     """
-    latest = df["start_time"].max()
-
-    meta = {
-        "generated_at"     : datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "match_count"      : int(len(df)),
-        "tournament_count" : int(df["league_name"].nunique()),
-        "excluded_count"   : None,
-        "latest_match_date": latest.strftime("%Y-%m-%d") if pd.notna(latest) else None,
-    }
+    meta = coverage_meta(rows, datetime.now(timezone.utc))
 
     with open(META_FILE, "w") as f:
         json.dump(meta, f, indent=2)
@@ -340,150 +301,7 @@ def write_meta(df):
     return meta
 
 
-def flatten_objectives(objectives):
-    """
-    Extracts and counts all objective types from the objectives array.
-    Returns a dictionary of counts and timings.
-    """
-    result = {
-        # Roshan
-        "radiant_roshan_kills"   : 0,
-        "dire_roshan_kills"      : 0,
-        "first_roshan_time"      : None,
-        "first_roshan_team"      : None,
-        # Aegis
-        "aegis_stolen"           : 0,
-        "aegis_denied"           : 0,
-        # Tormentor
-        "radiant_tormentor_kills": 0,
-        "dire_tormentor_kills"   : 0,
-        # Buildings
-        "radiant_towers_lost"    : 0,
-        "dire_towers_lost"       : 0,
-        "radiant_barracks_lost"  : 0,
-        "dire_barracks_lost"     : 0,
-        # Other
-        "first_blood_time"       : None,
-        "courier_kills"          : 0,
-    }
-
-    if not objectives:
-        return result
-
-    roshan_seen = False
-
-    for obj in objectives:
-        obj_type = obj.get("type")
-        team     = obj.get("team")
-        time     = obj.get("time")
-        key      = obj.get("key", "")
-
-        # ── Roshan kills ──────────────────────────────────────
-        if obj_type == "CHAT_MESSAGE_ROSHAN_KILL":
-            if team == 2:
-                result["radiant_roshan_kills"] += 1
-            elif team == 3:
-                result["dire_roshan_kills"] += 1
-            if not roshan_seen:
-                result["first_roshan_time"] = time
-                result["first_roshan_team"] = "radiant" if team == 2 else "dire"
-                roshan_seen = True
-
-        # ── Aegis ─────────────────────────────────────────────
-        elif obj_type == "CHAT_MESSAGE_AEGIS_STOLEN":
-            result["aegis_stolen"] += 1
-
-        elif obj_type == "CHAT_MESSAGE_DENIED_AEGIS":
-            result["aegis_denied"] += 1
-
-        # ── Tormentor ─────────────────────────────────────────
-        elif obj_type == "CHAT_MESSAGE_MINIBOSS_KILL":
-            if team == 2:
-                result["radiant_tormentor_kills"] += 1
-            elif team == 3:
-                result["dire_tormentor_kills"] += 1
-
-        # ── Buildings (use key field, not team) ───────────────
-        elif obj_type == "building_kill":
-            if "goodguys" in key:
-                team_killed = "radiant"
-            elif "badguys" in key:
-                team_killed = "dire"
-            else:
-                continue
-
-            if "tower" in key:
-                if team_killed == "radiant":
-                    result["radiant_towers_lost"] += 1
-                else:
-                    result["dire_towers_lost"] += 1
-            elif "rax" in key:
-                if team_killed == "radiant":
-                    result["radiant_barracks_lost"] += 1
-                else:
-                    result["dire_barracks_lost"] += 1
-
-        # ── First blood ───────────────────────────────────────
-        elif obj_type == "CHAT_MESSAGE_FIRSTBLOOD":
-            result["first_blood_time"] = time
-
-        # ── Courier ───────────────────────────────────────────
-        elif obj_type == "CHAT_MESSAGE_COURIER_LOST":
-            result["courier_kills"] += 1
-
-    return result
-
-
-def flatten_match(match):
-    """
-    Flattens a single raw match dictionary into a flat row for the DataFrame.
-    """
-    # ── Patch mapping ─────────────────────────────────────────
-    raw_patch = match.get("patch")
-    patch     = PATCH_MAP.get(raw_patch, str(raw_patch)) if raw_patch else None
-
-    # ── Duration conversions ──────────────────────────────────
-    duration_secs = match.get("duration")
-    duration_mins = round(duration_secs / 60, 1) if duration_secs else None
-
-    # ── Flat fields ───────────────────────────────────────────
-    row = {
-        "match_id"          : match.get("match_id"),
-        "league_id"         : match.get("leagueid"),
-        "league_name"       : match.get("league_name"),
-        "patch"             : patch,
-        "start_time"        : match.get("start_time"),
-        "duration_secs"     : duration_secs,
-        "duration_mins"     : duration_mins,
-        "radiant_win"       : match.get("radiant_win"),
-        "radiant_score"     : match.get("radiant_score"),
-        "dire_score"        : match.get("dire_score"),
-        "game_mode"         : match.get("game_mode"),
-    }
-
-    # ── Team fields ───────────────────────────────────────────
-    radiant_team = match.get("radiant_team") or {}
-    dire_team    = match.get("dire_team")    or {}
-
-    row["radiant_team_id"]   = radiant_team.get("team_id")
-    row["radiant_team_name"] = radiant_team.get("name", "Radiant")
-    row["dire_team_id"]      = dire_team.get("team_id")
-    row["dire_team_name"]    = dire_team.get("name", "Dire")
-
-    # ── Objectives ────────────────────────────────────────────
-    obj_data = flatten_objectives(match.get("objectives"))
-
-    # ── Convert objective timings to minutes ──────────────────
-    for time_field in ["first_roshan_time", "first_blood_time"]:
-        raw_time = obj_data.get(time_field)
-        obj_data[f"{time_field}_mins"] = round(raw_time / 60, 1) if raw_time else None
-
-    row.update(obj_data)
-
-    return row
-
-
-def build_dataframe():
+def build_dataframe(patch_map):
     """
     Loads matches.json, flattens every match, and returns a pandas DataFrame.
     Also saves to CSV.
@@ -501,7 +319,7 @@ def build_dataframe():
 
     print(f"Flattening {len(matches)} matches...")
 
-    rows = [flatten_match(match) for match in matches]
+    rows = build_rows(matches, patch_map)
     df   = pd.DataFrame(rows)
 
     # ── Convert start_time from unix timestamp to readable date ──
@@ -511,7 +329,8 @@ def build_dataframe():
     df.to_csv(CSV_FILE, index=False)
 
     # ── Record coverage alongside it ──────────────────────────
-    write_meta(df)
+    # Built from the flat rows, where start_time is still a unix timestamp.
+    write_meta(rows)
 
     print(f"CSV saved to {CSV_FILE}")
     print(f"DataFrame shape: {df.shape[0]} rows x {df.shape[1]} columns")
@@ -522,6 +341,22 @@ def build_dataframe():
 
     return df
 
-
-df = build_dataframe()
 # %%
+# # Entry point
+
+
+def main():
+    """
+    Fetches everything new, then rebuilds the CSV and the coverage record.
+    """
+    ensure_directories()
+
+    patch_map = get_patch_map()
+    print(f"Patch map loaded: {patch_map}")
+
+    run_pipeline()
+    return build_dataframe(patch_map)
+
+
+if __name__ == "__main__":
+    main()

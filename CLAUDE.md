@@ -30,11 +30,14 @@ The underlying cause is not fixed. League coverage is still a hardcoded dict tha
 
 ```
 project/
-├── opendota_pipeline.py      # main data pipeline (Steps 1-5)
+├── opendota_pipeline.py      # pipeline shell — network, files, checkpoints, main()
+├── core.py                   # pure transform core — plain data in, plain data out
 ├── dashboard.py              # Streamlit dashboard
 ├── push_data.py              # bumps dashboard.py date + commits + pushes to trigger redeploy
 ├── auto_update.py            # scheduled daily run: pipeline, then push if new data
 ├── requirements.txt          # flexible version ranges — NOT exact pins
+├── requirements-dev.txt      # adds pytest; not installed on Streamlit Cloud
+├── pytest.ini                # testpaths + pythonpath so `core` imports from root
 ├── runtime.txt               # python-3.11 for Streamlit Cloud
 ├── update_log.txt            # auto_update.py append-only log — local only
 ├── CLAUDE.md                 # this file — rules and facts
@@ -47,6 +50,9 @@ project/
 │   ├── index.md              # status board
 │   ├── _done/                # archive — closed items, mirrors the active structure
 │   └── <feature-slug>/       # open work only
+├── tests/                    # pytest suite — runs offline, no network, no API
+│   ├── conftest.py           # fixture loaders + a patch_map fixture
+│   └── fixtures/             # gzipped raw OpenDota payloads, committed
 ├── data/
 │   ├── matches.json          # raw match data — LOCAL ONLY, do not commit
 │   ├── matches_flat.csv      # flattened data — committed, this is what deploys
@@ -61,6 +67,7 @@ project/
 python opendota_pipeline.py   # fetch new matches (checkpoint skips already-fetched IDs)
 python push_data.py           # commit + push CSV and dashboard, triggers redeploy
 python auto_update.py         # both of the above, for the daily schedule
+python -m pytest              # full suite, offline, well under a second
 ```
 
 ## Rules
@@ -75,7 +82,9 @@ Non-negotiable when writing any new analysis or chart:
 - **Distribution charts use match-level rows** (`filtered`), never team-perspective rows (`team_filtered`) — the latter double-counts every match.
 - **Order tournaments by first match date, descending.** Computed once at startup as `league_start = raw.groupby("league_name")["start_time"].min()` and reused in the sidebar and the Drilldown tab.
 - **Note or filter `game_mode`** for anything draft-sensitive; the dataset is overwhelmingly mode 2 (Captain's Mode).
-- **Keep `requirements.txt` on flexible ranges.** Exact pins broke imports on Streamlit Cloud, which defaults to Python 3.14.
+- **Keep `requirements.txt` on flexible ranges.** Exact pins broke imports on Streamlit Cloud, which defaults to Python 3.14. `requirements-dev.txt` follows the same rule.
+- **New transformation logic goes in `core.py`, not the pipeline.** If it takes plain data and returns plain data, it belongs in the core and gets a test. Anything reaching the network, the filesystem, git or Streamlit stays in the shell. This is the seam the whole test suite hangs off — see `docs/adr/0005-pure-transform-core.md`.
+- **Nothing in the test suite may touch the network.** Fixtures are recorded payloads under `tests/fixtures/`; the whole suite runs offline in under a second, and it stays that way.
 - **Closing an issue is three moves, not one:** set `status: done`/`dropped`, move the file to `.scratch/_done/` mirroring its path, and move its row to Closed in `.scratch/index.md` — all in the same turn. See `docs/agents/issue-tracker.md`.
 
 ## Dashboard (dashboard.py)
@@ -103,15 +112,26 @@ Streamlit + Plotly. 5-tab layout with global sidebar filters.
 - `df_hash=str(len(df))` is **redundant** — Streamlit hashes DataFrame arguments unless the parameter name starts with `_`, so the cache key already covers contents. Do not copy this pattern into new cached functions.
 - `ANON_NAMES = {"Radiant", "Dire"}`
 
+## Transform Core (core.py)
+
+Pure functions only — plain data in, plain data out. No network, no filesystem, no clock, no Streamlit. Importing it has no side effects, which is what lets the tests exercise it offline.
+
+- `flatten_objectives(objectives)` — objectives array to counts and timings. A missing or empty array yields zeroes, indistinguishable from "nothing happened"; telling those apart is `tier1-pipeline-automation/05`.
+- `flatten_match(match, patch_map)` — one raw payload to one match row. **`patch_map` is a parameter, not a global** — building it is an API call, and injecting it is what makes this testable.
+- `build_rows(matches, patch_map)` — one row per match, order preserved.
+- `coverage_meta(rows, generated_at)` — the `meta.json` record. **`generated_at` is passed in** because reading the clock is I/O. Counts come from the rows, where `start_time` is still a unix timestamp.
+
 ## Data Pipeline (opendota_pipeline.py)
 
-Split into 5 steps using `# %%` cells:
+The shell around the core: network, files, checkpoints. Still organised in `# %%` cells:
 
-1. Config, league definitions, patch map from the OpenDota constants API
+1. Config, league definitions, `get_patch_map()` and `ensure_directories()` — both **called from `main()`, never at import**
 2. Rate-limited fetcher (`fetch_url`), 1s delay, 60 calls/min free tier
-3. **3a** checkpoint load/save + league match ID fetcher; **3b** match detail fetcher
+3. **3a** checkpoint load/save; **3b** match detail fetcher
 4. Main loop, match-level checkpoint only, appends to `matches.json`
-5. Flattens raw JSON to a DataFrame, exports `matches_flat.csv`, then writes `data/meta.json` via `write_meta()`
+5. `build_dataframe(patch_map)` reads the raw JSON, calls `core.build_rows`, exports `matches_flat.csv`, then writes `data/meta.json` via `write_meta()`
+
+**The module does nothing when imported.** `main()` is the only entry point and only the `__main__` guard calls it, so `python opendota_pipeline.py` and `auto_update.py` work exactly as before while `import opendota_pipeline` costs nothing. Reintroducing module-level execution breaks `tests/test_pipeline_shell.py`.
 
 **To re-fetch a league's matches** (e.g. objectives were missing): remove those match IDs from `checkpoints/fetched_matches.json` *and* those records from `data/matches.json`, then re-run.
 
@@ -128,7 +148,9 @@ Split into 5 steps using `# %%` cells:
 - `SAVE_RAW` — full raw API response saved to `matches.json`, enabling future hero/player extraction. Reads from an env var; defaults `true` locally, set `false` in CI.
 - Match-level checkpoint only — league match-ID lists are always re-fetched so new matches are detected.
 - Buildings counted via `goodguys`/`badguys` in the `key` field, not the `team` field, which is absent on `building_kill` events.
-- Patch IDs mapped dynamically from the OpenDota constants API at startup.
+- Patch IDs mapped dynamically from the OpenDota constants API at the start of `main()`, then passed down as an argument.
+- Transformation is split from I/O at a single seam (`core.py`). The refactor was verified by rebuilding all 1,822 rows through the new core and confirming `matches_flat.csv` came out byte-identical.
+- Tests are characterisation tests first: they record what the pipeline does *today*, so the correctness fixes in `tier1-pipeline-automation/04` show up as intended changes rather than silent ones.
 - `radiant_towers_lost` / `dire_towers_lost` name buildings *destroyed*, framed as losses by the owner.
 - `os.chdir()` removed from the pipeline in favour of `Path(__file__).parent` anchoring.
 - **An empty league match list is not a failure.** `fetch_url()` returns `None` on failure and a list on success, so the main loop tests `if data is None`, never `if not data`. A league added before it starts — The International 2026 — legitimately returns `[]`, and truthiness would log it as a failed fetch.

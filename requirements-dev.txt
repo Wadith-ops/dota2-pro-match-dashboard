@@ -1,0 +1,5 @@
+# Development-only dependencies. Not installed on Streamlit Cloud.
+# Flexible ranges, same rule as requirements.txt — exact pins previously broke
+# imports on Streamlit Cloud, which defaults to a newer Python than we target.
+-r requirements.txt
+pytest>=8.0.0
