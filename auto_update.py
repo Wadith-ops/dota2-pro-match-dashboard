@@ -57,7 +57,13 @@ log(f"Bumped dashboard.py date to {DATE}")
 # Step 4 — commit and push
 # Only stage what exists — `git add` exits 128 on a pathspec matching no file,
 # which would abort the run after Step 3 has already dirtied dashboard.py.
-DEPLOYED = ["data/matches_flat.csv", "data/meta.json", "dashboard.py"]
+DEPLOYED = [
+    "data/matches_flat.csv",
+    "data/meta.json",
+    # See push_data.py — the two lists must stay in step.
+    "data/tier1_calendar.json",
+    "dashboard.py",
+]
 run(["git", "add", *[p for p in DEPLOYED if (HERE / p).exists()]])
 run(["git", "commit", "-m", f"data: auto-update matches ({DATE})"])
 run(["git", "push", "origin", "master"])

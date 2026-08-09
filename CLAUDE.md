@@ -33,6 +33,7 @@ The underlying cause is not fixed. League coverage is still a hardcoded dict tha
 ```
 project/
 ├── opendota_pipeline.py      # pipeline shell — network, files, checkpoints, main()
+├── liquipedia.py             # Liquipedia client shell — Tier 1 calendar, cache, rate limit
 ├── core.py                   # pure transform core — plain data in, plain data out
 ├── dashboard.py              # Streamlit dashboard
 ├── push_data.py              # bumps dashboard.py date + commits + pushes to trigger redeploy
@@ -58,9 +59,11 @@ project/
 ├── data/
 │   ├── matches.json          # raw match data — LOCAL ONLY, do not commit
 │   ├── matches_flat.csv      # flattened data — committed, this is what deploys
-│   └── meta.json             # coverage record — committed, read by the dashboard
+│   ├── meta.json             # coverage record — committed, read by the dashboard
+│   └── tier1_calendar.json   # Tier 1 fallback calendar — committed, generated not typed
 └── checkpoints/
-    └── fetched_matches.json  # pipeline checkpoint — local only
+    ├── fetched_matches.json          # pipeline checkpoint — local only
+    └── liquipedia_tier1_cache.json   # Tier 1 calendar cache — local only
 ```
 
 ## Commands
@@ -87,6 +90,8 @@ Non-negotiable when writing any new analysis or chart:
 - **Keep `requirements.txt` on flexible ranges.** Exact pins broke imports on Streamlit Cloud, which defaults to Python 3.14. `requirements-dev.txt` follows the same rule.
 - **New transformation logic goes in `core.py`, not the pipeline.** If it takes plain data and returns plain data, it belongs in the core and gets a test. Anything reaching the network, the filesystem, git or Streamlit stays in the shell. This is the seam the whole test suite hangs off — see `docs/adr/0005-pure-transform-core.md`.
 - **Nothing in the test suite may touch the network.** Fixtures are recorded payloads under `tests/fixtures/`; the whole suite runs offline in under a second, and it stays that way.
+- **Liquipedia's four access conditions are code, not intent.** Any new call to `liquipedia.net` goes through `liquipedia.py` so it inherits the User-Agent, the 30-second `action=parse` interval and the cache. Anything displaying calendar data renders `core.LIQUIPEDIA_ATTRIBUTION`. These are the terms of the free API — see ADR-0006.
+- **A Liquipedia page that parses to zero rows is a failed fetch, not an empty Tier 1 list.** Treating it as real would report every tournament missing at once, the first time a class name changes. `get_tier1_events` falls back and reports its `source`; never infer health from an empty list.
 - **Closing an issue is three moves, not one:** set `status: done`/`dropped`, move the file to `.scratch/_done/` mirroring its path, and move its row to Closed in `.scratch/index.md` — all in the same turn. See `docs/agents/issue-tracker.md`.
 
 ## Dashboard (dashboard.py)
@@ -143,10 +148,22 @@ The shell around the core: network, files, checkpoints. Still organised in `# %%
 
 **API:** OpenDota (`https://api.opendota.com/api`), 60 calls/min and 50k/month on free tier. Endpoints: `/leagues/{id}/matches`, `/matches/{id}`, `/constants/patch`.
 
+## Liquipedia Client (liquipedia.py)
+
+Obtains the Tier 1 calendar that defines the dataset's scope. Parsing lives in `core.py`; this is the network, the cache and the clock. **Importing it does nothing** — every entry point takes its collaborators as arguments, which is how the tests run offline.
+
+**API:** `https://liquipedia.net/dota2/api.php`, `action=parse&prop=text` on `Tier_1_Tournaments`. This is the free MediaWiki endpoint and needs **no API key** — not `api.liquipedia.net`, which is the paid v3 product. See ADR-0006.
+
+- `ParseRateLimiter` — one `action=parse` per 30s. Clock and sleep injected. One call per run is far inside the limit; the limiter is for issue 14, which walks several years in one run. **`fetch_tier1_html` defaults to the process-wide `_PARSE_LIMITER`** — building one per call gives each an empty history and enforces nothing, which is how the interval once held in the tests and nowhere else.
+- `fetch_tier1_html(page, limiter, get)` — returns HTML or `None`. **Never raises.** A MediaWiki error arrives as HTTP 200 with an `error` key, so the status code alone does not mean success.
+- `get_tier1_events(...)` — returns `{"events": [...], "source": ...}`. Degrades fresh cache → network → stale cache → committed seed calendar. **Read the `source`**; an empty list is not a health signal.
+- `data/tier1_calendar.json` — the committed fallback, generated from the same table rather than typed. Issue 06's ledger absorbs it.
+- The cache is 24h, in `checkpoints/` and local-only.
+
 ## Hosting
 
 - Streamlit Community Cloud, redeploys automatically on every push to `master`
-- Only `matches_flat.csv` and `meta.json` are committed; `matches.json` stays local. Both are in the `git add` list in `push_data.py` **and** `auto_update.py` — adding a new deployed data file means editing both.
+- Three data files are committed: `matches_flat.csv`, `meta.json` and `tier1_calendar.json`. `matches.json` and the Liquipedia cache stay local. All three are in the `DEPLOYED` list in `push_data.py` **and** `auto_update.py` — adding a new deployed data file means editing both.
 - Streamlit may not redeploy on CSV-only pushes — always use `push_data.py`, which bumps a `# data: YYYY-MM-DD` comment in `dashboard.py` so a `.py` file always changes. The `ttl=1800` on `load_data()` is the safety net.
 
 ## Key Technical Decisions
@@ -161,6 +178,8 @@ The shell around the core: network, files, checkpoints. Still organised in `# %%
 - `radiant_towers_lost` / `dire_towers_lost` name buildings *destroyed*, framed as losses by the owner.
 - `os.chdir()` removed from the pipeline in favour of `Path(__file__).parent` anchoring.
 - **An empty league match list is not a failure.** `fetch_url()` returns `None` on failure and a list on success, so the main loop tests `if data is None`, never `if not data`. A league added before it starts — The International 2026 — legitimately returns `[]`, and truthiness would log it as a failed fetch.
+- Tier 1 scope is read from Liquipedia's free MediaWiki API, whose terms explicitly permit it; the paid v3 API was never needed. The four access conditions are enforced in code rather than intended — see ADR-0006. The manually transcribed calendar option survives as the *fallback*, so a markup change costs freshness rather than the whole list.
+- Liquipedia and OpenDota name the same tournament differently — `BLAST SLAM VII` against `Blast Slam VII`, `PGL Wallachia Season 7` against `PGL Wallachia 2026 Season 7`. This is why resolution is by date window (ADR-0001) and why the calendar carries dates as its primary key of use.
 
 ## Adding New Leagues
 
@@ -175,6 +194,8 @@ Current process, until the ledger lands (`tier1-pipeline-automation/06`):
 5. Add the league to the table in `CONTEXT.md`
 
 To find the OpenDota league id for a Tier 1 event, **match on dates, never on names** — the two sources name tournaments differently. Take the event's date window from Liquipedia and find the league whose matches fall inside it; if more than one does, the right one is the league with the most teams already in the dataset.
+
+The date windows no longer need looking up by hand: `python liquipedia.py` prints the calendar, and `data/tier1_calendar.json` holds it offline. Applying it automatically is the resolver, `tier1-pipeline-automation/08`.
 
 ## Environment
 

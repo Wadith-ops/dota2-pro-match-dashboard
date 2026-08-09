@@ -1,0 +1,1952 @@
+{
+  "_comment": "Tier 1 tournament calendar, generated from Liquipedia's rendered Tier 1 Tournaments table. Fallback used when the MediaWiki API is unreachable or its markup has changed. Regenerate with `python liquipedia.py --refresh-seed` rather than editing by hand.",
+  "source": "https://liquipedia.net/dota2/Tier_1_Tournaments",
+  "license": "CC BY-SA 3.0",
+  "recorded_on": "2026-08-09",
+  "events": [
+    {
+      "name": "PGL Wallachia Season 12",
+      "start_date": "2027-10-19",
+      "end_date": "2027-10-31",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "PGL Wallachia Season 11",
+      "start_date": "2027-05-11",
+      "end_date": "2027-05-23",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "PGL Wallachia Season 10",
+      "start_date": "2027-03-02",
+      "end_date": "2027-03-14",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "BLAST SLAM IX",
+      "start_date": "2026-11-17",
+      "end_date": "2026-11-29",
+      "prize_pool_usd": 750000
+    },
+    {
+      "name": "BLAST SLAM VIII",
+      "start_date": "2026-09-29",
+      "end_date": "2026-10-11",
+      "prize_pool_usd": 750000
+    },
+    {
+      "name": "PGL Wallachia Season 9",
+      "start_date": "2026-09-17",
+      "end_date": "2026-09-27",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "The International 2026",
+      "start_date": "2026-08-13",
+      "end_date": "2026-08-23",
+      "prize_pool_usd": 2744104
+    },
+    {
+      "name": "1win Essence II",
+      "start_date": "2026-07-30",
+      "end_date": "2026-08-05",
+      "prize_pool_usd": 200000
+    },
+    {
+      "name": "Esports World Cup 2026",
+      "start_date": "2026-07-07",
+      "end_date": "2026-07-19",
+      "prize_pool_usd": 2000000
+    },
+    {
+      "name": "BLAST SLAM VII",
+      "start_date": "2026-05-26",
+      "end_date": "2026-06-07",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "DreamLeague Season 29",
+      "start_date": "2026-05-13",
+      "end_date": "2026-05-24",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "PGL Wallachia Season 8",
+      "start_date": "2026-04-18",
+      "end_date": "2026-04-26",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "ESL One Birmingham 2026",
+      "start_date": "2026-03-22",
+      "end_date": "2026-03-29",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "PGL Wallachia Season 7",
+      "start_date": "2026-03-07",
+      "end_date": "2026-03-15",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "DreamLeague Season 28",
+      "start_date": "2026-02-16",
+      "end_date": "2026-03-01",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "BLAST SLAM VI",
+      "start_date": "2026-02-03",
+      "end_date": "2026-02-15",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "DreamLeague Season 27",
+      "start_date": "2025-12-10",
+      "end_date": "2025-12-21",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "BLAST Slam V",
+      "start_date": "2025-11-25",
+      "end_date": "2025-12-07",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "PGL Wallachia Season 6",
+      "start_date": "2025-11-15",
+      "end_date": "2025-11-23",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "FISSURE PLAYGROUND 2",
+      "start_date": "2025-10-23",
+      "end_date": "2025-11-02",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "BLAST Slam IV",
+      "start_date": "2025-10-14",
+      "end_date": "2025-11-09",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "The International 2025",
+      "start_date": "2025-09-04",
+      "end_date": "2025-09-14",
+      "prize_pool_usd": 2881791
+    },
+    {
+      "name": "FISSURE Universe: Episode 6",
+      "start_date": "2025-08-19",
+      "end_date": "2025-08-24",
+      "prize_pool_usd": 250000
+    },
+    {
+      "name": "Clavision Masters 2025: Snow-Ruyi",
+      "start_date": "2025-07-28",
+      "end_date": "2025-08-03",
+      "prize_pool_usd": 700000
+    },
+    {
+      "name": "Esports World Cup 2025",
+      "start_date": "2025-07-08",
+      "end_date": "2025-07-19",
+      "prize_pool_usd": 3000000
+    },
+    {
+      "name": "PGL Wallachia Season 5",
+      "start_date": "2025-06-21",
+      "end_date": "2025-06-29",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "DreamLeague Season 26",
+      "start_date": "2025-05-19",
+      "end_date": "2025-06-01",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "BLAST Slam III",
+      "start_date": "2025-05-06",
+      "end_date": "2025-05-11",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "PGL Wallachia Season 4",
+      "start_date": "2025-04-19",
+      "end_date": "2025-04-27",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "ESL One Raleigh 2025",
+      "start_date": "2025-04-07",
+      "end_date": "2025-04-13",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "FISSURE Universe: Episode 4",
+      "start_date": "2025-03-22",
+      "end_date": "2025-03-30",
+      "prize_pool_usd": 500000
+    },
+    {
+      "name": "PGL Wallachia Season 3",
+      "start_date": "2025-03-08",
+      "end_date": "2025-03-16",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "DreamLeague Season 25",
+      "start_date": "2025-02-16",
+      "end_date": "2025-03-04",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "BLAST Slam II",
+      "start_date": "2025-02-04",
+      "end_date": "2025-02-09",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "FISSURE PLAYGROUND 1",
+      "start_date": "2025-01-24",
+      "end_date": "2025-02-02",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "ESL One Bangkok 2024",
+      "start_date": "2024-12-09",
+      "end_date": "2024-12-15",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "BLAST Slam I",
+      "start_date": "2024-11-26",
+      "end_date": "2024-12-01",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "DreamLeague Season 24",
+      "start_date": "2024-10-27",
+      "end_date": "2024-11-10",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "BetBoom Dacha Belgrade 2024",
+      "start_date": "2024-10-19",
+      "end_date": "2024-10-26",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "The International 2024",
+      "start_date": "2024-09-04",
+      "end_date": "2024-09-15",
+      "prize_pool_usd": 2776566
+    },
+    {
+      "name": "Clavision: Snow Ruyi",
+      "start_date": "2024-07-28",
+      "end_date": "2024-08-04",
+      "prize_pool_usd": 500000
+    },
+    {
+      "name": "Riyadh Masters 2024",
+      "start_date": "2024-07-04",
+      "end_date": "2024-07-21",
+      "prize_pool_usd": 5000000
+    },
+    {
+      "name": "DreamLeague Season 23",
+      "start_date": "2024-05-20",
+      "end_date": "2024-05-26",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "PGL Wallachia Season 1",
+      "start_date": "2024-05-10",
+      "end_date": "2024-05-19",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "ESL One Birmingham 2024",
+      "start_date": "2024-04-22",
+      "end_date": "2024-04-28",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "Elite League Season 1",
+      "start_date": "2024-03-31",
+      "end_date": "2024-04-14",
+      "prize_pool_usd": 960000
+    },
+    {
+      "name": "DreamLeague Season 22",
+      "start_date": "2024-02-25",
+      "end_date": "2024-03-10",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "BetBoom Dacha Dubai 2024",
+      "start_date": "2024-02-04",
+      "end_date": "2024-02-16",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "BetBoom Dacha Dubai 2024: 1x1",
+      "start_date": "2024-02-10",
+      "end_date": "2024-02-10",
+      "prize_pool_usd": 100000
+    },
+    {
+      "name": "ESL One Kuala Lumpur 2023",
+      "start_date": "2023-12-11",
+      "end_date": "2023-12-17",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "The International 2023",
+      "start_date": "2023-10-12",
+      "end_date": "2023-10-29",
+      "prize_pool_usd": 3380455
+    },
+    {
+      "name": "DreamLeague Season 21",
+      "start_date": "2023-09-18",
+      "end_date": "2023-09-24",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "BetBoom Dacha 2023",
+      "start_date": "2023-09-10",
+      "end_date": "2023-09-16",
+      "prize_pool_usd": 250000
+    },
+    {
+      "name": "Riyadh Masters 2023",
+      "start_date": "2023-07-19",
+      "end_date": "2023-07-30",
+      "prize_pool_usd": 15000000
+    },
+    {
+      "name": "The Bali Major 2023",
+      "start_date": "2023-06-29",
+      "end_date": "2023-07-09",
+      "prize_pool_usd": 500000
+    },
+    {
+      "name": "DreamLeague Season 20",
+      "start_date": "2023-06-11",
+      "end_date": "2023-06-25",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "ESL One Berlin Major 2023",
+      "start_date": "2023-04-26",
+      "end_date": "2023-05-07",
+      "prize_pool_usd": 500000
+    },
+    {
+      "name": "DreamLeague Season 19",
+      "start_date": "2023-04-09",
+      "end_date": "2023-04-23",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "The Lima Major 2023",
+      "start_date": "2023-02-22",
+      "end_date": "2023-03-05",
+      "prize_pool_usd": 500000
+    },
+    {
+      "name": "The International 2022",
+      "start_date": "2022-10-15",
+      "end_date": "2022-10-30",
+      "prize_pool_usd": 18930775
+    },
+    {
+      "name": "ESL One Malaysia 2022",
+      "start_date": "2022-08-23",
+      "end_date": "2022-08-28",
+      "prize_pool_usd": 400000
+    },
+    {
+      "name": "PGL Arlington Major 2022",
+      "start_date": "2022-08-04",
+      "end_date": "2022-08-14",
+      "prize_pool_usd": 500000
+    },
+    {
+      "name": "Riyadh Masters 2022",
+      "start_date": "2022-07-20",
+      "end_date": "2022-07-24",
+      "prize_pool_usd": 4000000
+    },
+    {
+      "name": "ESL One Stockholm Major 2022",
+      "start_date": "2022-05-12",
+      "end_date": "2022-05-22",
+      "prize_pool_usd": 500000
+    },
+    {
+      "name": "GAMERS GALAXY: Invitational Series Dubai 2022",
+      "start_date": "2022-03-02",
+      "end_date": "2022-03-06",
+      "prize_pool_usd": 272254
+    },
+    {
+      "name": "The International 2021",
+      "start_date": "2021-10-07",
+      "end_date": "2021-10-17",
+      "prize_pool_usd": 40018195
+    },
+    {
+      "name": "OGA Dota PIT Invitational",
+      "start_date": "2021-09-06",
+      "end_date": "2021-09-10",
+      "prize_pool_usd": 275000
+    },
+    {
+      "name": "ESL One Fall 2021",
+      "start_date": "2021-08-21",
+      "end_date": "2021-08-29",
+      "prize_pool_usd": 400000
+    },
+    {
+      "name": "ESL One Summer 2021",
+      "start_date": "2021-06-16",
+      "end_date": "2021-06-20",
+      "prize_pool_usd": 400000
+    },
+    {
+      "name": "WePlay AniMajor",
+      "start_date": "2021-06-02",
+      "end_date": "2021-06-13",
+      "prize_pool_usd": 500000
+    },
+    {
+      "name": "ONE Esports Singapore Major 2021",
+      "start_date": "2021-03-27",
+      "end_date": "2021-04-04",
+      "prize_pool_usd": 500000
+    },
+    {
+      "name": "EPIC League Season 2 Division 1",
+      "start_date": "2020-12-08",
+      "end_date": "2020-12-13",
+      "prize_pool_usd": 500000
+    },
+    {
+      "name": "ESL One Germany 2020",
+      "start_date": "2020-10-05",
+      "end_date": "2020-11-01",
+      "prize_pool_usd": 400000
+    },
+    {
+      "name": "OMEGA League: Europe Immortal Division",
+      "start_date": "2020-08-14",
+      "end_date": "2020-09-06",
+      "prize_pool_usd": 500000
+    },
+    {
+      "name": "ONE Esports Singapore Major 2020",
+      "start_date": "2020-06-20",
+      "end_date": "2020-06-28",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "EPICENTER Major 2020",
+      "start_date": "2020-05-02",
+      "end_date": "2020-05-10",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "ESL One Los Angeles 2020",
+      "start_date": "2020-03-15",
+      "end_date": "2020-03-22",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "DreamLeague Season 13",
+      "start_date": "2020-01-18",
+      "end_date": "2020-01-26",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "ONE Esports Invitational Singapore 2019",
+      "start_date": "2019-12-17",
+      "end_date": "2019-12-22",
+      "prize_pool_usd": 500000
+    },
+    {
+      "name": "MDL Chengdu Major",
+      "start_date": "2019-11-16",
+      "end_date": "2019-11-24",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "The International 2019",
+      "start_date": "2019-08-15",
+      "end_date": "2019-08-25",
+      "prize_pool_usd": 34330068
+    },
+    {
+      "name": "EPICENTER Major 2019",
+      "start_date": "2019-06-22",
+      "end_date": "2019-06-30",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "MDL Disneyland® Paris Major",
+      "start_date": "2019-05-04",
+      "end_date": "2019-05-12",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "DreamLeague Season 11",
+      "start_date": "2019-03-14",
+      "end_date": "2019-03-24",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "The Chongqing Major",
+      "start_date": "2019-01-19",
+      "end_date": "2019-01-27",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "The Kuala Lumpur Major",
+      "start_date": "2018-11-09",
+      "end_date": "2018-11-18",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "The International 2018",
+      "start_date": "2018-08-15",
+      "end_date": "2018-08-25",
+      "prize_pool_usd": 25532177
+    },
+    {
+      "name": "China Dota2 Supermajor",
+      "start_date": "2018-06-02",
+      "end_date": "2018-06-10",
+      "prize_pool_usd": 1500000
+    },
+    {
+      "name": "ESL One Birmingham 2018",
+      "start_date": "2018-05-23",
+      "end_date": "2018-05-27",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "MDL Changsha Major",
+      "start_date": "2018-05-14",
+      "end_date": "2018-05-20",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "EPICENTER XL",
+      "start_date": "2018-04-27",
+      "end_date": "2018-05-06",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "Dota 2 Asia Championships 2018",
+      "start_date": "2018-03-29",
+      "end_date": "2018-04-07",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "The Bucharest Major",
+      "start_date": "2018-03-04",
+      "end_date": "2018-03-11",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "ESL One Katowice 2018",
+      "start_date": "2018-02-20",
+      "end_date": "2018-02-25",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "Galaxy Battles II: Emerging Worlds",
+      "start_date": "2018-01-19",
+      "end_date": "2018-01-21",
+      "prize_pool_usd": 500000
+    },
+    {
+      "name": "DreamLeague Season 8",
+      "start_date": "2017-12-01",
+      "end_date": "2017-12-03",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "ESL One Hamburg 2017",
+      "start_date": "2017-10-26",
+      "end_date": "2017-10-29",
+      "prize_pool_usd": 1000000
+    },
+    {
+      "name": "The International 2017",
+      "start_date": "2017-08-02",
+      "end_date": "2017-08-12",
+      "prize_pool_usd": 24787916
+    },
+    {
+      "name": "Mars Dota 2 League 2017",
+      "start_date": "2017-07-05",
+      "end_date": "2017-07-09",
+      "prize_pool_usd": 250000
+    },
+    {
+      "name": "Galaxy Battles",
+      "start_date": "2017-06-15",
+      "end_date": "2017-06-18",
+      "prize_pool_usd": 150000
+    },
+    {
+      "name": "DOTA Summit 7",
+      "start_date": "2017-06-14",
+      "end_date": "2017-06-18",
+      "prize_pool_usd": 100000
+    },
+    {
+      "name": "EPICENTER 2017",
+      "start_date": "2017-06-04",
+      "end_date": "2017-06-11",
+      "prize_pool_usd": 500000
+    },
+    {
+      "name": "ZOTAC Cup Masters",
+      "start_date": "2017-05-30",
+      "end_date": "2017-06-03",
+      "prize_pool_usd": 100000
+    },
+    {
+      "name": "The Manila Masters",
+      "start_date": "2017-05-25",
+      "end_date": "2017-05-28",
+      "prize_pool_usd": 250000
+    },
+    {
+      "name": "StarLadder i-League Invitational Season 2",
+      "start_date": "2017-05-18",
+      "end_date": "2017-05-21",
+      "prize_pool_usd": 100000
+    },
+    {
+      "name": "The Kiev Major 2017",
+      "start_date": "2017-04-24",
+      "end_date": "2017-04-30",
+      "prize_pool_usd": 3000000
+    },
+    {
+      "name": "Dota 2 Asia Championships 2017",
+      "start_date": "2017-03-27",
+      "end_date": "2017-04-04",
+      "prize_pool_usd": 611997
+    },
+    {
+      "name": "StarLadder i-League StarSeries Season 3",
+      "start_date": "2017-02-23",
+      "end_date": "2017-02-26",
+      "prize_pool_usd": 300000
+    },
+    {
+      "name": "Dota Pit League Season 5",
+      "start_date": "2017-01-20",
+      "end_date": "2017-01-22",
+      "prize_pool_usd": 139860
+    },
+    {
+      "name": "ESL One Genting 2017",
+      "start_date": "2017-01-06",
+      "end_date": "2017-01-08",
+      "prize_pool_usd": 250000
+    },
+    {
+      "name": "World Cyber Arena 2016",
+      "start_date": "2016-12-14",
+      "end_date": "2016-12-16",
+      "prize_pool_usd": 591292
+    },
+    {
+      "name": "The Boston Major 2016",
+      "start_date": "2016-12-03",
+      "end_date": "2016-12-10",
+      "prize_pool_usd": 3000000
+    },
+    {
+      "name": "The Summit 6",
+      "start_date": "2016-11-16",
+      "end_date": "2016-11-20",
+      "prize_pool_usd": 100000
+    },
+    {
+      "name": "Northern Arena BEAT Invitational",
+      "start_date": "2016-11-10",
+      "end_date": "2016-11-13",
+      "prize_pool_usd": 100000
+    },
+    {
+      "name": "Mars Dota 2 League 2016 Autumn",
+      "start_date": "2016-09-28",
+      "end_date": "2016-10-02",
+      "prize_pool_usd": 250000
+    },
+    {
+      "name": "The International 2016",
+      "start_date": "2016-08-02",
+      "end_date": "2016-08-13",
+      "prize_pool_usd": 20770460
+    },
+    {
+      "name": "StarLadder i-League StarSeries Season 2",
+      "start_date": "2016-07-21",
+      "end_date": "2016-07-24",
+      "prize_pool_usd": 300000
+    },
+    {
+      "name": "The Summit 5",
+      "start_date": "2016-07-13",
+      "end_date": "2016-07-17",
+      "prize_pool_usd": 101044
+    },
+    {
+      "name": "Nanyang Dota 2 Championships Season 2",
+      "start_date": "2016-07-06",
+      "end_date": "2016-07-10",
+      "prize_pool_usd": 201270
+    },
+    {
+      "name": "ESL One Frankfurt 2016",
+      "start_date": "2016-06-17",
+      "end_date": "2016-06-19",
+      "prize_pool_usd": 314545
+    },
+    {
+      "name": "The Manila Major 2016",
+      "start_date": "2016-06-03",
+      "end_date": "2016-06-12",
+      "prize_pool_usd": 3000000
+    },
+    {
+      "name": "EPICENTER 2016",
+      "start_date": "2016-05-09",
+      "end_date": "2016-05-15",
+      "prize_pool_usd": 500000
+    },
+    {
+      "name": "WePlay Dota 2 League Season 3",
+      "start_date": "2016-04-28",
+      "end_date": "2016-05-01",
+      "prize_pool_usd": 208239
+    },
+    {
+      "name": "ESL One Manila 2016",
+      "start_date": "2016-04-22",
+      "end_date": "2016-04-24",
+      "prize_pool_usd": 250000
+    },
+    {
+      "name": "StarLadder i-League Invitational Season 1",
+      "start_date": "2016-04-14",
+      "end_date": "2016-04-17",
+      "prize_pool_usd": 100000
+    },
+    {
+      "name": "Dota Pit League Season 4",
+      "start_date": "2016-03-19",
+      "end_date": "2016-03-20",
+      "prize_pool_usd": 195274
+    },
+    {
+      "name": "The Shanghai Major 2016",
+      "start_date": "2016-02-25",
+      "end_date": "2016-03-06",
+      "prize_pool_usd": 3000000
+    },
+    {
+      "name": "MarsTV Dota 2 League 2015 Winter",
+      "start_date": "2016-01-27",
+      "end_date": "2016-01-31",
+      "prize_pool_usd": 277668
+    },
+    {
+      "name": "StarLadder i-League StarSeries Season 1",
+      "start_date": "2016-01-13",
+      "end_date": "2016-01-17",
+      "prize_pool_usd": 302227
+    },
+    {
+      "name": "World Cyber Arena 2015",
+      "start_date": "2015-12-17",
+      "end_date": "2015-12-20",
+      "prize_pool_usd": 663339
+    },
+    {
+      "name": "The Summit 4",
+      "start_date": "2015-12-09",
+      "end_date": "2015-12-13",
+      "prize_pool_usd": 114866
+    },
+    {
+      "name": "Game Show Global eSports Cup Season 1",
+      "start_date": "2015-11-30",
+      "end_date": "2015-12-06",
+      "prize_pool_usd": 280000
+    },
+    {
+      "name": "The Defense Season 5",
+      "start_date": "2015-09-07",
+      "end_date": "2015-12-06",
+      "prize_pool_usd": 78586
+    },
+    {
+      "name": "The Frankfurt Major 2015",
+      "start_date": "2015-11-13",
+      "end_date": "2015-11-21",
+      "prize_pool_usd": 3000000
+    },
+    {
+      "name": "Nanyang Dota 2 Championships",
+      "start_date": "2015-10-26",
+      "end_date": "2015-11-01",
+      "prize_pool_usd": 220183
+    },
+    {
+      "name": "MLG World Finals",
+      "start_date": "2015-10-16",
+      "end_date": "2015-10-18",
+      "prize_pool_usd": 284954
+    },
+    {
+      "name": "ESL One New York 2015",
+      "start_date": "2015-10-03",
+      "end_date": "2015-10-04",
+      "prize_pool_usd": 286622
+    },
+    {
+      "name": "The International 2015",
+      "start_date": "2015-07-27",
+      "end_date": "2015-08-08",
+      "prize_pool_usd": 18429613
+    },
+    {
+      "name": "Dota Pit League Season 3",
+      "start_date": "2015-01-21",
+      "end_date": "2015-07-12",
+      "prize_pool_usd": 265378
+    },
+    {
+      "name": "Esportal Dota 2 League",
+      "start_date": "2014-11-28",
+      "end_date": "2015-07-05",
+      "prize_pool_usd": 64000
+    },
+    {
+      "name": "ESL One Frankfurt 2015",
+      "start_date": "2015-06-18",
+      "end_date": "2015-06-21",
+      "prize_pool_usd": 296203
+    },
+    {
+      "name": "DreamLeague Season 3",
+      "start_date": "2015-05-04",
+      "end_date": "2015-06-15",
+      "prize_pool_usd": 149582
+    },
+    {
+      "name": "joinDOTA MLG Pro League Season 2",
+      "start_date": "2015-06-05",
+      "end_date": "2015-06-07",
+      "prize_pool_usd": 167248
+    },
+    {
+      "name": "MarsTV Dota 2 League 2015 Spring",
+      "start_date": "2015-06-03",
+      "end_date": "2015-06-07",
+      "prize_pool_usd": 241815
+    },
+    {
+      "name": "i-League Season 3",
+      "start_date": "2015-04-06",
+      "end_date": "2015-05-23",
+      "prize_pool_usd": 428369
+    },
+    {
+      "name": "The Summit 3",
+      "start_date": "2015-05-13",
+      "end_date": "2015-05-17",
+      "prize_pool_usd": 271685
+    },
+    {
+      "name": "Dota 2 Champions League Season 5",
+      "start_date": "2015-05-09",
+      "end_date": "2015-05-10",
+      "prize_pool_usd": 79504
+    },
+    {
+      "name": "StarLadder StarSeries Season 12",
+      "start_date": "2015-03-09",
+      "end_date": "2015-04-26",
+      "prize_pool_usd": 150000
+    },
+    {
+      "name": "joinDOTA MLG Pro League Season 1",
+      "start_date": "2015-04-10",
+      "end_date": "2015-04-12",
+      "prize_pool_usd": 86461
+    },
+    {
+      "name": "Major All Stars Dota 2 Tournament",
+      "start_date": "2015-03-20",
+      "end_date": "2015-03-22",
+      "prize_pool_usd": 111979
+    },
+    {
+      "name": "Dota 2 Asia Championships 2015",
+      "start_date": "2015-01-29",
+      "end_date": "2015-02-09",
+      "prize_pool_usd": 3057519
+    },
+    {
+      "name": "StarLadder StarSeries Season 11",
+      "start_date": "2015-01-15",
+      "end_date": "2015-01-18",
+      "prize_pool_usd": 86521
+    },
+    {
+      "name": "i-League Season 2",
+      "start_date": "2014-11-17",
+      "end_date": "2015-01-10",
+      "prize_pool_usd": 129308
+    },
+    {
+      "name": "Dota 2 League Season 5",
+      "start_date": "2015-01-05",
+      "end_date": "2015-01-06",
+      "prize_pool_usd": 58397
+    },
+    {
+      "name": "Dota Pit League Season 2",
+      "start_date": "2014-09-25",
+      "end_date": "2014-12-23",
+      "prize_pool_usd": 80589
+    },
+    {
+      "name": "XMG Captains Draft 2.0",
+      "start_date": "2014-10-31",
+      "end_date": "2014-12-21",
+      "prize_pool_usd": 276742
+    },
+    {
+      "name": "The Summit 2",
+      "start_date": "2014-12-03",
+      "end_date": "2014-12-07",
+      "prize_pool_usd": 310912
+    },
+    {
+      "name": "DreamLeague Season 2",
+      "start_date": "2014-10-06",
+      "end_date": "2014-11-29",
+      "prize_pool_usd": 115560
+    },
+    {
+      "name": "Dota 2 Champions League Season 4",
+      "start_date": "2014-10-31",
+      "end_date": "2014-11-02",
+      "prize_pool_usd": 76235
+    },
+    {
+      "name": "National Electronic Sports Tournament 2014",
+      "start_date": "2014-10-30",
+      "end_date": "2014-11-02",
+      "prize_pool_usd": 60619
+    },
+    {
+      "name": "Excellent Moscow Cup 2",
+      "start_date": "2014-08-26",
+      "end_date": "2014-10-29",
+      "prize_pool_usd": 75575
+    },
+    {
+      "name": "StarLadder StarSeries Season 10",
+      "start_date": "2014-10-23",
+      "end_date": "2014-10-26",
+      "prize_pool_usd": 233980
+    },
+    {
+      "name": "ESL One New York 2014",
+      "start_date": "2014-10-09",
+      "end_date": "2014-10-10",
+      "prize_pool_usd": 141010
+    },
+    {
+      "name": "World Cyber Arena 2014",
+      "start_date": "2014-10-02",
+      "end_date": "2014-10-05",
+      "prize_pool_usd": 473072
+    },
+    {
+      "name": "i-League Season 1",
+      "start_date": "2014-09-25",
+      "end_date": "2014-09-28",
+      "prize_pool_usd": 311655
+    },
+    {
+      "name": "World E-sport Championships 2014",
+      "start_date": "2014-09-05",
+      "end_date": "2014-09-07",
+      "prize_pool_usd": 168029
+    },
+    {
+      "name": "The International 2014",
+      "start_date": "2014-07-08",
+      "end_date": "2014-07-21",
+      "prize_pool_usd": 10923977
+    },
+    {
+      "name": "ESL One Frankfurt 2014",
+      "start_date": "2014-06-28",
+      "end_date": "2014-06-29",
+      "prize_pool_usd": 210900
+    },
+    {
+      "name": "Dota 2 Champions League Season 3",
+      "start_date": "2014-04-25",
+      "end_date": "2014-06-25",
+      "prize_pool_usd": 67835
+    },
+    {
+      "name": "HyperX D2L Western Challenge",
+      "start_date": "2014-04-01",
+      "end_date": "2014-06-24",
+      "prize_pool_usd": 68517
+    },
+    {
+      "name": "DreamLeague Season 1",
+      "start_date": "2014-03-03",
+      "end_date": "2014-06-16",
+      "prize_pool_usd": 265257
+    },
+    {
+      "name": "The Summit",
+      "start_date": "2014-06-05",
+      "end_date": "2014-06-08",
+      "prize_pool_usd": 132350
+    },
+    {
+      "name": "WPC 2014",
+      "start_date": "2014-05-26",
+      "end_date": "2014-06-02",
+      "prize_pool_usd": 245062
+    },
+    {
+      "name": "MarsTV Dota 2 League 2014",
+      "start_date": "2014-05-24",
+      "end_date": "2014-05-25",
+      "prize_pool_usd": 24047
+    },
+    {
+      "name": "Excellent Moscow Cup",
+      "start_date": "2014-03-28",
+      "end_date": "2014-05-18",
+      "prize_pool_usd": 20125
+    },
+    {
+      "name": "StarLadder StarSeries Season 9",
+      "start_date": "2014-04-17",
+      "end_date": "2014-04-20",
+      "prize_pool_usd": 190162
+    },
+    {
+      "name": "Dota 2 Champions League Season 2",
+      "start_date": "2014-02-09",
+      "end_date": "2014-04-15",
+      "prize_pool_usd": 124165
+    },
+    {
+      "name": "Nexon Sponsorship League Season 3",
+      "start_date": "2014-01-04",
+      "end_date": "2014-02-15",
+      "prize_pool_usd": 69560
+    },
+    {
+      "name": "G-League 2013",
+      "start_date": "2013-12-09",
+      "end_date": "2014-01-19",
+      "prize_pool_usd": 44672
+    },
+    {
+      "name": "StarLadder StarSeries Season 8",
+      "start_date": "2013-11-25",
+      "end_date": "2014-01-19",
+      "prize_pool_usd": 124000
+    },
+    {
+      "name": "Dota 2 Champions League Season 1",
+      "start_date": "2013-10-17",
+      "end_date": "2014-01-15",
+      "prize_pool_usd": 50000
+    },
+    {
+      "name": "Dota 2 League Season 4",
+      "start_date": "2014-01-07",
+      "end_date": "2014-01-08",
+      "prize_pool_usd": 50000
+    },
+    {
+      "name": "Red Bull ECL 2013 Grand Finals",
+      "start_date": "2014-01-03",
+      "end_date": "2014-01-07",
+      "prize_pool_usd": 21503
+    },
+    {
+      "name": "2013 WPC ACE Dota 2 League",
+      "start_date": "2013-09-22",
+      "end_date": "2014-01-01",
+      "prize_pool_usd": 247304
+    },
+    {
+      "name": "Nexon Sponsorship League Season 2",
+      "start_date": "2013-11-30",
+      "end_date": "2013-12-28",
+      "prize_pool_usd": 89122
+    },
+    {
+      "name": "EMS One Fall Season",
+      "start_date": "2013-09-02",
+      "end_date": "2013-12-08",
+      "prize_pool_usd": 39000
+    },
+    {
+      "name": "DreamLeague Kick-Off Season",
+      "start_date": "2013-11-04",
+      "end_date": "2013-11-30",
+      "prize_pool_usd": 50000
+    },
+    {
+      "name": "MLG Championship Columbus",
+      "start_date": "2013-11-22",
+      "end_date": "2013-11-24",
+      "prize_pool_usd": 136960
+    },
+    {
+      "name": "Techlabs Cup 2013 Grand Final",
+      "start_date": "2013-11-16",
+      "end_date": "2013-11-17",
+      "prize_pool_usd": 25000
+    },
+    {
+      "name": "National Electronic Sports Tournament 2013",
+      "start_date": "2013-11-08",
+      "end_date": "2013-11-10",
+      "prize_pool_usd": 36161
+    },
+    {
+      "name": "Nexon Sponsorship League Season 1",
+      "start_date": "2013-09-28",
+      "end_date": "2013-11-10",
+      "prize_pool_usd": 112954
+    },
+    {
+      "name": "WePlay Dota2 League Season 2",
+      "start_date": "2013-09-11",
+      "end_date": "2013-11-10",
+      "prize_pool_usd": 25000
+    },
+    {
+      "name": "Electronic Sports World Cup 2013",
+      "start_date": "2013-10-31",
+      "end_date": "2013-11-03",
+      "prize_pool_usd": 25000
+    },
+    {
+      "name": "StarLadder StarSeries Season 7",
+      "start_date": "2013-08-31",
+      "end_date": "2013-10-13",
+      "prize_pool_usd": 22500
+    },
+    {
+      "name": "The International 2013",
+      "start_date": "2013-08-02",
+      "end_date": "2013-08-11",
+      "prize_pool_usd": 2874380
+    },
+    {
+      "name": "The Defense Season 4",
+      "start_date": "2013-05-21",
+      "end_date": "2013-07-24",
+      "prize_pool_usd": 25000
+    },
+    {
+      "name": "The Premier League Season 5",
+      "start_date": "2013-05-20",
+      "end_date": "2013-07-21",
+      "prize_pool_usd": 15500
+    },
+    {
+      "name": "RaidCall Dota 2 League Season 3",
+      "start_date": "2013-05-20",
+      "end_date": "2013-07-17",
+      "prize_pool_usd": 10000
+    },
+    {
+      "name": "RedBull ECL 2013 Dota 2 Season",
+      "start_date": "2013-07-10",
+      "end_date": "2013-07-14",
+      "prize_pool_usd": 21217
+    },
+    {
+      "name": "EMS One Summer Season",
+      "start_date": "2013-06-19",
+      "end_date": "2013-07-14",
+      "prize_pool_usd": 35000
+    },
+    {
+      "name": "Alienware Cup 2013 - Season 1",
+      "start_date": "2013-06-16",
+      "end_date": "2013-07-09",
+      "prize_pool_usd": 60000
+    },
+    {
+      "name": "StarLadder StarSeries Season 6",
+      "start_date": "2013-05-19",
+      "end_date": "2013-07-07",
+      "prize_pool_usd": 22500
+    },
+    {
+      "name": "Dota 2 Super League",
+      "start_date": "2013-05-10",
+      "end_date": "2013-07-06",
+      "prize_pool_usd": 163050
+    },
+    {
+      "name": "DreamHack Summer 2013",
+      "start_date": "2013-06-15",
+      "end_date": "2013-06-17",
+      "prize_pool_usd": 46422
+    },
+    {
+      "name": "World GameMaster Tournament 2013",
+      "start_date": "2013-06-15",
+      "end_date": "2013-06-16",
+      "prize_pool_usd": 16323
+    },
+    {
+      "name": "G-1 Champions League Season 5",
+      "start_date": "2013-05-24",
+      "end_date": "2013-05-26",
+      "prize_pool_usd": 65260
+    },
+    {
+      "name": "The Premier League Season 4",
+      "start_date": "2013-02-10",
+      "end_date": "2013-04-28",
+      "prize_pool_usd": 10000
+    },
+    {
+      "name": "EMS One Spring Season",
+      "start_date": "2013-03-18",
+      "end_date": "2013-04-21",
+      "prize_pool_usd": 35000
+    },
+    {
+      "name": "RaidCall Dota 2 League Season 2",
+      "start_date": "2012-12-12",
+      "end_date": "2013-04-10",
+      "prize_pool_usd": 10000
+    },
+    {
+      "name": "StarLadder StarSeries Season 5",
+      "start_date": "2013-02-11",
+      "end_date": "2013-04-07",
+      "prize_pool_usd": 15000
+    },
+    {
+      "name": "The Defense Season 3",
+      "start_date": "2012-11-26",
+      "end_date": "2013-03-30",
+      "prize_pool_usd": 20000
+    },
+    {
+      "name": "G-League Season 2",
+      "start_date": "2012-12-24",
+      "end_date": "2013-03-09",
+      "prize_pool_usd": 41872
+    },
+    {
+      "name": "The Premier League Season 3",
+      "start_date": "2012-10-03",
+      "end_date": "2013-01-13",
+      "prize_pool_usd": 6000
+    },
+    {
+      "name": "The Asia 2012",
+      "start_date": "2012-12-22",
+      "end_date": "2012-12-23",
+      "prize_pool_usd": 30000
+    },
+    {
+      "name": "StarLadder StarSeries Season 4",
+      "start_date": "2012-11-13",
+      "end_date": "2012-12-23",
+      "prize_pool_usd": 15000
+    },
+    {
+      "name": "ASUS Open 2012 Final Battle of the Year",
+      "start_date": "2012-12-13",
+      "end_date": "2012-12-16",
+      "prize_pool_usd": 15000
+    },
+    {
+      "name": "SMM Grand National Final 2012",
+      "start_date": "2012-12-13",
+      "end_date": "2012-12-16",
+      "prize_pool_usd": 39871
+    },
+    {
+      "name": "Thor Open 2012",
+      "start_date": "2012-12-08",
+      "end_date": "2012-12-09",
+      "prize_pool_usd": 19460
+    },
+    {
+      "name": "DreamHack Winter 2012",
+      "start_date": "2012-11-22",
+      "end_date": "2012-11-25",
+      "prize_pool_usd": 30198
+    },
+    {
+      "name": "G-1 Champions League Season 4",
+      "start_date": "2012-10-22",
+      "end_date": "2012-11-18",
+      "prize_pool_usd": 53026
+    },
+    {
+      "name": "RaidCall Dota 2 League Season 1",
+      "start_date": "2012-09-10",
+      "end_date": "2012-11-18",
+      "prize_pool_usd": 10000
+    },
+    {
+      "name": "Electronic Sports World Cup 2012",
+      "start_date": "2012-11-03",
+      "end_date": "2012-11-04",
+      "prize_pool_usd": 25000
+    },
+    {
+      "name": "StarLadder StarSeries Season 3",
+      "start_date": "2012-10-18",
+      "end_date": "2012-10-21",
+      "prize_pool_usd": 15000
+    },
+    {
+      "name": "Dream Cup Game Season 2",
+      "start_date": "2012-09-04",
+      "end_date": "2012-09-23",
+      "prize_pool_usd": 20645
+    },
+    {
+      "name": "ACE Dota Pro-league 2012 Season 1",
+      "start_date": "2012-05-28",
+      "end_date": "2012-09-14",
+      "prize_pool_usd": 45811
+    },
+    {
+      "name": "The International 2012",
+      "start_date": "2012-08-26",
+      "end_date": "2012-09-02",
+      "prize_pool_usd": 1600000
+    },
+    {
+      "name": "The Defense Season 2",
+      "start_date": "2012-06-21",
+      "end_date": "2012-08-12",
+      "prize_pool_usd": 12291
+    },
+    {
+      "name": "G-League 2012 Season 1",
+      "start_date": "2012-05-07",
+      "end_date": "2012-08-12",
+      "prize_pool_usd": 42514
+    },
+    {
+      "name": "Prodota 2 Worldwide League",
+      "start_date": "2012-04-13",
+      "end_date": "2012-08-05",
+      "prize_pool_usd": 20000
+    },
+    {
+      "name": "StarLadder StarSeries Season 2",
+      "start_date": "2012-05-16",
+      "end_date": "2012-07-15",
+      "prize_pool_usd": 15000
+    },
+    {
+      "name": "The Premier League Season 2",
+      "start_date": "2012-04-17",
+      "end_date": "2012-07-08",
+      "prize_pool_usd": 10000
+    },
+    {
+      "name": "DreamHack Summer 2012",
+      "start_date": "2012-06-16",
+      "end_date": "2012-06-18",
+      "prize_pool_usd": 28772
+    },
+    {
+      "name": "NVIDIA Gaming Festival 2012",
+      "start_date": "2012-04-29",
+      "end_date": "2012-04-30",
+      "prize_pool_usd": 21000
+    },
+    {
+      "name": "StarLadder StarSeries Season 1",
+      "start_date": "2012-03-12",
+      "end_date": "2012-04-29",
+      "prize_pool_usd": 15000
+    },
+    {
+      "name": "G-1 Champions League Season 3",
+      "start_date": "2012-02-14",
+      "end_date": "2012-04-07",
+      "prize_pool_usd": 13474
+    },
+    {
+      "name": "The Premier League Season 1",
+      "start_date": "2012-01-04",
+      "end_date": "2012-03-11",
+      "prize_pool_usd": 10000
+    },
+    {
+      "name": "The Defense Season 1",
+      "start_date": "2011-11-15",
+      "end_date": "2012-03-04",
+      "prize_pool_usd": 13196
+    },
+    {
+      "name": "World GameMaster Tournament 2012",
+      "start_date": "2012-01-12",
+      "end_date": "2012-01-13",
+      "prize_pool_usd": 9560
+    },
+    {
+      "name": "G-League 2011 Season 3",
+      "start_date": "2011-11-21",
+      "end_date": "2012-01-08",
+      "prize_pool_usd": 42932
+    },
+    {
+      "name": "ESports Champions League 2011 Grand Finals",
+      "start_date": "2011-12-28",
+      "end_date": "2011-12-31",
+      "prize_pool_usd": 13474
+    },
+    {
+      "name": "Dota2 Star Championship",
+      "start_date": "2011-12-08",
+      "end_date": "2011-12-11",
+      "prize_pool_usd": 20000
+    },
+    {
+      "name": "SMM Grand National Final 2011",
+      "start_date": "2011-12-02",
+      "end_date": "2011-12-04",
+      "prize_pool_usd": 37090
+    },
+    {
+      "name": "DreamHack Winter 2011",
+      "start_date": "2011-11-24",
+      "end_date": "2011-11-26",
+      "prize_pool_usd": 14500
+    },
+    {
+      "name": "Omega Sector Professional League Autumn 2011",
+      "start_date": "2011-11-19",
+      "end_date": "2011-11-20",
+      "prize_pool_usd": 25690
+    },
+    {
+      "name": "World DotA Championship 2011",
+      "start_date": "2011-11-11",
+      "end_date": "2011-11-13",
+      "prize_pool_usd": 37873
+    },
+    {
+      "name": "G-1 Champions League Season 2",
+      "start_date": "2011-10-14",
+      "end_date": "2011-11-06",
+      "prize_pool_usd": 10273
+    },
+    {
+      "name": "Yougang Cup Hangzhou DOTA Professional Invitational",
+      "start_date": "2011-10-27",
+      "end_date": "2011-10-30",
+      "prize_pool_usd": 18895
+    },
+    {
+      "name": "Electronic Sports World Cup 2011",
+      "start_date": "2011-10-23",
+      "end_date": "2011-10-25",
+      "prize_pool_usd": 22000
+    },
+    {
+      "name": "G-League 2011 Season 2",
+      "start_date": "2011-10-03",
+      "end_date": "2011-10-15",
+      "prize_pool_usd": 28237
+    },
+    {
+      "name": "E-Sports Thailand Championship 2011",
+      "start_date": "2011-10-06",
+      "end_date": "2011-10-09",
+      "prize_pool_usd": 9699
+    },
+    {
+      "name": "China Wuxi International eSports Champions Cup 2011",
+      "start_date": "2011-09-20",
+      "end_date": "2011-09-25",
+      "prize_pool_usd": 9428
+    },
+    {
+      "name": "The International 2011",
+      "start_date": "2011-08-17",
+      "end_date": "2011-08-21",
+      "prize_pool_usd": 1600000
+    },
+    {
+      "name": "CPL Invitational 2011",
+      "start_date": "2011-08-08",
+      "end_date": "2011-08-09",
+      "prize_pool_usd": 11660
+    },
+    {
+      "name": "G-1 Champions League Season 1",
+      "start_date": "2011-06-13",
+      "end_date": "2011-07-09",
+      "prize_pool_usd": 7731
+    },
+    {
+      "name": "G-League 2011 Season 1",
+      "start_date": "2011-04-28",
+      "end_date": "2011-06-26",
+      "prize_pool_usd": 28064
+    },
+    {
+      "name": "ASUS Open Spring 2011",
+      "start_date": "2011-05-27",
+      "end_date": "2011-05-28",
+      "prize_pool_usd": 5337
+    },
+    {
+      "name": "Dota Master Tournament 2011",
+      "start_date": "2011-04-15",
+      "end_date": "2011-04-17",
+      "prize_pool_usd": 5810
+    },
+    {
+      "name": "Omega Sector Professional League Spring 2011",
+      "start_date": "2011-04-02",
+      "end_date": "2011-04-03",
+      "prize_pool_usd": 16424
+    },
+    {
+      "name": "I-City Pro DotA Championship 2011",
+      "start_date": "2011-03-25",
+      "end_date": "2011-03-27",
+      "prize_pool_usd": 7861
+    },
+    {
+      "name": "World GameMaster Tournament 2010",
+      "start_date": "2011-01-04",
+      "end_date": "2011-01-06",
+      "prize_pool_usd": 8363
+    },
+    {
+      "name": "G-League 2010 Season 5",
+      "start_date": "2010-12-30",
+      "end_date": "2010-12-30",
+      "prize_pool_usd": 7591
+    },
+    {
+      "name": "SMM Grand National Final 2010",
+      "start_date": "2010-12-03",
+      "end_date": "2010-12-05",
+      "prize_pool_usd": 32185
+    },
+    {
+      "name": "ASUS Open Autumn 2010",
+      "start_date": "2010-11-27",
+      "end_date": "2010-11-28",
+      "prize_pool_usd": 3202
+    },
+    {
+      "name": "World DotA Championship 2010",
+      "start_date": "2010-11-10",
+      "end_date": "2010-11-14",
+      "prize_pool_usd": 30158
+    },
+    {
+      "name": "The DotA Razer Global Challenge",
+      "start_date": "2010-08-15",
+      "end_date": "2010-11-07",
+      "prize_pool_usd": 17400
+    },
+    {
+      "name": "Road of the King 2010",
+      "start_date": "2010-10-28",
+      "end_date": "2010-10-29",
+      "prize_pool_usd": 16484
+    },
+    {
+      "name": "Alienware TopGamer",
+      "start_date": "2010-10-23",
+      "end_date": "2010-10-24",
+      "prize_pool_usd": 6754
+    },
+    {
+      "name": "E-Sports Thailand Championship 2010",
+      "start_date": "2010-10-14",
+      "end_date": "2010-10-17",
+      "prize_pool_usd": 8788
+    },
+    {
+      "name": "ASUS Open Summer 2010",
+      "start_date": "2010-08-28",
+      "end_date": "2010-08-29",
+      "prize_pool_usd": 3253
+    },
+    {
+      "name": "National Electronic Sports Open 2010",
+      "start_date": "2010-08-08",
+      "end_date": "2010-08-11",
+      "prize_pool_usd": 16094
+    },
+    {
+      "name": "IEM V Global Challenge Shanghai",
+      "start_date": "2010-07-29",
+      "end_date": "2010-08-01",
+      "prize_pool_usd": 12000
+    },
+    {
+      "name": "WCG Asian Championship 2010",
+      "start_date": "2010-07-09",
+      "end_date": "2010-07-11",
+      "prize_pool_usd": 6519
+    },
+    {
+      "name": "Electronic Sports World Cup 2010",
+      "start_date": "2010-06-30",
+      "end_date": "2010-07-04",
+      "prize_pool_usd": 24500
+    },
+    {
+      "name": "ASUS Open Spring 2010",
+      "start_date": "2010-05-22",
+      "end_date": "2010-05-23",
+      "prize_pool_usd": 3194
+    },
+    {
+      "name": "ASUS Open Winter 2010",
+      "start_date": "2010-02-22",
+      "end_date": "2010-02-23",
+      "prize_pool_usd": 3160
+    },
+    {
+      "name": "Alienware DotA League 2009",
+      "start_date": "2009-12-01",
+      "end_date": "2009-12-30",
+      "prize_pool_usd": 17579
+    },
+    {
+      "name": "G-League 2009 Season 2",
+      "start_date": "2009-12-20",
+      "end_date": "2009-12-20",
+      "prize_pool_usd": 4425
+    },
+    {
+      "name": "SMM Grand National Final 2009",
+      "start_date": "2009-11-27",
+      "end_date": "2009-11-29",
+      "prize_pool_usd": 26234
+    },
+    {
+      "name": "DreamHack Winter 2009",
+      "start_date": "2009-11-26",
+      "end_date": "2009-11-29",
+      "prize_pool_usd": 3721
+    },
+    {
+      "name": "ASUS Open Autumn 2009",
+      "start_date": "2009-11-21",
+      "end_date": "2009-11-22",
+      "prize_pool_usd": 5183
+    },
+    {
+      "name": "E-Sports Thailand Championship 2009",
+      "start_date": "2009-10-15",
+      "end_date": "2009-10-18",
+      "prize_pool_usd": 5981
+    },
+    {
+      "name": "IEM IV Global Challenge Chengdu",
+      "start_date": "2009-10-01",
+      "end_date": "2009-10-03",
+      "prize_pool_usd": 15000
+    },
+    {
+      "name": "Omega Sector Professional League Autumn 2009",
+      "start_date": "2009-09-27",
+      "end_date": "2009-09-29",
+      "prize_pool_usd": 20536
+    },
+    {
+      "name": "Electronic Sports World Cup - Open Game 2009",
+      "start_date": "2009-08-28",
+      "end_date": "2009-08-30",
+      "prize_pool_usd": 9719
+    },
+    {
+      "name": "Gamescom 2009",
+      "start_date": "2009-08-20",
+      "end_date": "2009-08-22",
+      "prize_pool_usd": 15000
+    },
+    {
+      "name": "WCG Asian Championship 2009",
+      "start_date": "2009-07-04",
+      "end_date": "2009-07-07",
+      "prize_pool_usd": 7561
+    },
+    {
+      "name": "DreamHack Summer 2009",
+      "start_date": "2009-06-13",
+      "end_date": "2009-06-16",
+      "prize_pool_usd": 2556
+    },
+    {
+      "name": "G-League 2009 Season 1",
+      "start_date": "2009-05-24",
+      "end_date": "2009-05-24",
+      "prize_pool_usd": 4408
+    },
+    {
+      "name": "ASUS Open Spring 2009",
+      "start_date": "2009-05-23",
+      "end_date": "2009-05-24",
+      "prize_pool_usd": 3877
+    },
+    {
+      "name": "DTS-Cup 2009",
+      "start_date": "2009-05-16",
+      "end_date": "2009-05-17",
+      "prize_pool_usd": 6000
+    },
+    {
+      "name": "ASUS Open Winter 2009",
+      "start_date": "2009-02-21",
+      "end_date": "2009-02-22",
+      "prize_pool_usd": 3456
+    },
+    {
+      "name": "Dota-League Masters 2009",
+      "start_date": "2009-02-06",
+      "end_date": "2009-02-08",
+      "prize_pool_usd": 1931
+    },
+    {
+      "name": "G-League 2008 Season 2",
+      "start_date": "2008-12-28",
+      "end_date": "2008-12-28",
+      "prize_pool_usd": 3361
+    },
+    {
+      "name": "World GameMaster Tournament 2008",
+      "start_date": "2008-12-12",
+      "end_date": "2008-12-14",
+      "prize_pool_usd": 8035
+    },
+    {
+      "name": "DreamHack Winter 2008",
+      "start_date": "2008-11-27",
+      "end_date": "2008-11-29",
+      "prize_pool_usd": 5308
+    },
+    {
+      "name": "SMM Grand National Final 2008",
+      "start_date": "2008-11-21",
+      "end_date": "2008-11-23",
+      "prize_pool_usd": 21228
+    },
+    {
+      "name": "ASUS Open Autumn 2008",
+      "start_date": "2008-11-15",
+      "end_date": "2008-11-16",
+      "prize_pool_usd": 4617
+    },
+    {
+      "name": "Make Games Colorful 2008",
+      "start_date": "2008-10-24",
+      "end_date": "2008-10-26",
+      "prize_pool_usd": 9495
+    },
+    {
+      "name": "Electronic Sports World Cup 2008",
+      "start_date": "2008-08-25",
+      "end_date": "2008-08-27",
+      "prize_pool_usd": 26000
+    },
+    {
+      "name": "ASUS Open Summer 2008",
+      "start_date": "2008-08-23",
+      "end_date": "2008-08-24",
+      "prize_pool_usd": 6157
+    },
+    {
+      "name": "WCG Asian Championship 2008",
+      "start_date": "2008-08-09",
+      "end_date": "2008-08-10",
+      "prize_pool_usd": 7000
+    },
+    {
+      "name": "G-League 2008 Season 1",
+      "start_date": "2008-07-20",
+      "end_date": "2008-07-20",
+      "prize_pool_usd": 3380
+    },
+    {
+      "name": "Electronic Sports World Cup 2008 Masters of Paris",
+      "start_date": "2008-07-04",
+      "end_date": "2008-07-06",
+      "prize_pool_usd": 12500
+    },
+    {
+      "name": "DreamHack Summer 2008",
+      "start_date": "2008-06-14",
+      "end_date": "2008-06-17",
+      "prize_pool_usd": 7118
+    },
+    {
+      "name": "ASUS Open Spring 2008",
+      "start_date": "2008-05-17",
+      "end_date": "2008-05-17",
+      "prize_pool_usd": 6336
+    },
+    {
+      "name": "DTS-Cup 2008",
+      "start_date": "2008-04-06",
+      "end_date": "2008-04-06",
+      "prize_pool_usd": 2241
+    },
+    {
+      "name": "E-Sports Thailand Championship 2008",
+      "start_date": "2008-04-05",
+      "end_date": "2008-04-06",
+      "prize_pool_usd": 3176
+    },
+    {
+      "name": "ASUS Open Winter 2008",
+      "start_date": "2008-02-23",
+      "end_date": "2008-02-24",
+      "prize_pool_usd": 6168
+    },
+    {
+      "name": "Fire in Ice 2007",
+      "start_date": "2007-12-27",
+      "end_date": "2007-12-29",
+      "prize_pool_usd": 10000
+    },
+    {
+      "name": "Hostile Tactics Gaming League Europe",
+      "start_date": "2007-11-08",
+      "end_date": "2007-12-15",
+      "prize_pool_usd": 15000
+    },
+    {
+      "name": "DreamHack Winter 2007",
+      "start_date": "2007-11-29",
+      "end_date": "2007-12-02",
+      "prize_pool_usd": 8138
+    },
+    {
+      "name": "ASUS Open Autumn 2007",
+      "start_date": "2007-11-24",
+      "end_date": "2007-11-25",
+      "prize_pool_usd": 6168
+    },
+    {
+      "name": "SMM Grand National Final 2007",
+      "start_date": "2007-11-23",
+      "end_date": "2007-11-25",
+      "prize_pool_usd": 13984
+    },
+    {
+      "name": "ASUS Open Summer 2007",
+      "start_date": "2007-08-24",
+      "end_date": "2007-08-26",
+      "prize_pool_usd": 4867
+    },
+    {
+      "name": "WCG Asian Championship 2007",
+      "start_date": "2007-08-02",
+      "end_date": "2007-08-05",
+      "prize_pool_usd": 8570
+    },
+    {
+      "name": "DreamHack Summer 2007",
+      "start_date": "2007-06-16",
+      "end_date": "2007-06-19",
+      "prize_pool_usd": 7420
+    },
+    {
+      "name": "ASUS Open Spring 2007",
+      "start_date": "2007-05-26",
+      "end_date": "2007-05-27",
+      "prize_pool_usd": 5763
+    },
+    {
+      "name": "DTS-Cup 2007",
+      "start_date": "2007-04-07",
+      "end_date": "2007-04-08",
+      "prize_pool_usd": 1000
+    },
+    {
+      "name": "ASUS Open Winter 2007",
+      "start_date": "2007-02-24",
+      "end_date": "2007-02-25",
+      "prize_pool_usd": 9975
+    },
+    {
+      "name": "DreamHack Winter 2006",
+      "start_date": "2006-11-30",
+      "end_date": "2006-12-03",
+      "prize_pool_usd": 739
+    },
+    {
+      "name": "CPL 2006 China",
+      "start_date": "2006-11-25",
+      "end_date": "2006-11-26",
+      "prize_pool_usd": 1273
+    },
+    {
+      "name": "DTS-Cup 2006",
+      "start_date": "2006-04-23",
+      "end_date": "2006-04-23",
+      "prize_pool_usd": 800
+    },
+    {
+      "name": "ASUS Open Autumn 2005",
+      "start_date": "2005-11-26",
+      "end_date": "2005-11-27",
+      "prize_pool_usd": 1738
+    },
+    {
+      "name": "ASUS Open Summer 2005",
+      "start_date": "2005-08-20",
+      "end_date": "2005-08-22",
+      "prize_pool_usd": 1226
+    }
+  ]
+}

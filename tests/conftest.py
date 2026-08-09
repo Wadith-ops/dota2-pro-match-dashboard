@@ -1,11 +1,13 @@
 """
-Shared fixtures: recorded raw OpenDota match payloads.
+Shared fixtures: recorded raw OpenDota match payloads, plus one recorded
+Liquipedia page.
 
 Reading these gzipped files is the only filesystem access the suite performs.
 Nothing here touches the network, so the suite runs offline.
 
-Each payload is a match exactly as `opendota_pipeline` stored it, which means
-it carries the `league_name` the pipeline injects on top of the API response.
+Each match payload is a match exactly as `opendota_pipeline` stored it, which
+means it carries the `league_name` the pipeline injects on top of the API
+response.
 """
 import gzip
 import json
@@ -50,3 +52,19 @@ def game_mode_1_match():
 def patch_map():
     """The subset of the OpenDota patch constants the fixtures need."""
     return {58: "7.39", 59: "7.40", 60: "7.41"}
+
+
+@pytest.fixture
+def liquipedia_response():
+    """
+    The full MediaWiki `action=parse` envelope for Tier 1 Tournaments, recorded
+    2026-08-09. Kept whole rather than trimmed to the table, so the client's
+    unwrapping of `parse.text` is exercised by the same fixture as the parser.
+    """
+    return load_payload("liquipedia_tier1")
+
+
+@pytest.fixture
+def liquipedia_tier1_html(liquipedia_response):
+    """Just the rendered HTML, which is what the pure parser takes."""
+    return liquipedia_response["parse"]["text"]

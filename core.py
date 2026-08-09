@@ -10,7 +10,8 @@ never goes near the API.
 Importing this module has no side effects.
 """
 import re
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+from html.parser import HTMLParser
 
 # The draft format the dataset is overwhelmingly played on. Anything else is
 # flagged on the row — never dropped from it.
@@ -257,3 +258,251 @@ def coverage_meta(rows, generated_at):
         "excluded_count"   : None,
         "latest_match_date": latest,
     }
+
+
+# ── Liquipedia Tier 1 calendar ────────────────────────────────────────────────
+#
+# What counts as Tier 1 is Liquipedia's Tier 1 Tournaments page, not OpenDota's
+# `professional` flag (ADR-0001). The parsing lives here because it takes plain
+# HTML and returns plain records; fetching that HTML is `liquipedia.py`.
+#
+# Only the **rendered tournaments table** is authoritative. The page also
+# carries a Timeline template which, as the page itself says, includes Tier 2
+# events by the listed organisers. Reading the timeline is what produced the
+# false conclusion that FISSURE Universe Episode 8 was Tier 1 and 1win Essence
+# II was not — the mistake that left a tournament out of the dataset for two
+# months. The row class below is the table, and nothing here looks anywhere else.
+
+# Attribution is a condition of Liquipedia's free API access, not a courtesy.
+# The dashboard renders this wherever it shows calendar-derived data (issue 09).
+LIQUIPEDIA_ATTRIBUTION = "Tournament calendar from Liquipedia (CC BY-SA 3.0)"
+
+_TIER1_ROW_CLASS        = "table2__row--body"
+_TIER1_NAME_CELL_CLASS  = "column__tournament"
+
+_MONTHS = {
+    "Jan":  1, "Feb":  2, "Mar":  3, "Apr":  4, "May":  5, "Jun":  6,
+    "Jul":  7, "Aug":  8, "Sep":  9, "Oct": 10, "Nov": 11, "Dec": 12,
+}
+_MONTH_NAMES = "|".join(_MONTHS)
+
+# Four shapes appear on the page. Where only one year is printed it belongs to
+# the *end* date:
+#   "Nov 28, 2014 - Jul 05, 2015"  both years spelled out — every crossing of a
+#                                  new year on the page is written this way
+#   "Sep 29 - Oct 11, 2026"        crosses a month inside one year
+#   "Oct 19-31, 2027"              inside one month
+#   "Feb 10, 2024"                 a single day
+_DATE_BOTH_YEARS = re.compile(
+    rf"^({_MONTH_NAMES})\s+(\d{{1,2}}),\s*(\d{{4}})"
+    rf"\s*-\s*({_MONTH_NAMES})\s+(\d{{1,2}}),\s*(\d{{4}})$"
+)
+_DATE_CROSS_MONTH = re.compile(
+    rf"^({_MONTH_NAMES})\s+(\d{{1,2}})\s*-\s*({_MONTH_NAMES})\s+(\d{{1,2}}),\s*(\d{{4}})$"
+)
+_DATE_SAME_MONTH = re.compile(
+    rf"^({_MONTH_NAMES})\s+(\d{{1,2}})\s*-\s*(\d{{1,2}}),\s*(\d{{4}})$"
+)
+_DATE_SINGLE_DAY = re.compile(
+    rf"^({_MONTH_NAMES})\s+(\d{{1,2}}),\s*(\d{{4}})$"
+)
+
+# Liquipedia mixes en dashes, em dashes and hyphens, and separates with regular
+# spaces or non-breaking ones. None of that should decide whether a row parses.
+_DASHES = str.maketrans({"–": "-", "—": "-", "−": "-", "\xa0": " "})
+
+
+def _iso(year, month, day):
+    """A date as `YYYY-MM-DD`, or None if those numbers are not a real date."""
+    try:
+        return date(year, month, day).isoformat()
+    except ValueError:
+        return None
+
+
+def parse_date_range(text):
+    """
+    Reads one of Liquipedia's date cells into `(start_date, end_date)` as ISO
+    strings. A single-day event returns the same date twice rather than a None
+    end, so a caller can always treat the pair as a window.
+
+    Returns None when the cell is not a date at all — Liquipedia writes "TBD"
+    for events it has not scheduled, and one unscheduled event must not abort
+    the whole parse.
+    """
+    if not text:
+        return None
+
+    cleaned = " ".join(str(text).translate(_DASHES).split())
+
+    both_years = _DATE_BOTH_YEARS.match(cleaned)
+    if both_years:
+        start_month, start_day, start_year, end_month, end_day, end_year = (
+            both_years.groups()
+        )
+        start = _iso(int(start_year), _MONTHS[start_month], int(start_day))
+        end   = _iso(int(end_year), _MONTHS[end_month], int(end_day))
+        return (start, end) if start and end else None
+
+    crossing = _DATE_CROSS_MONTH.match(cleaned)
+    if crossing:
+        start_month, start_day, end_month, end_day, year = crossing.groups()
+        start_month, end_month = _MONTHS[start_month], _MONTHS[end_month]
+        year = int(year)
+
+        # The year is printed once, on the end date, so an event running
+        # December to January would start in the *previous* year. Every
+        # new-year crossing on the recorded page is written with both years
+        # instead and is handled above, so this branch is defensive: it costs
+        # one comparison and stops a format change being recorded as an event
+        # running backwards by eleven months.
+        start_year = year - 1 if start_month > end_month else year
+
+        start = _iso(start_year, start_month, int(start_day))
+        end   = _iso(year, end_month, int(end_day))
+        return (start, end) if start and end else None
+
+    same_month = _DATE_SAME_MONTH.match(cleaned)
+    if same_month:
+        month, start_day, end_day, year = same_month.groups()
+        start = _iso(int(year), _MONTHS[month], int(start_day))
+        end   = _iso(int(year), _MONTHS[month], int(end_day))
+        return (start, end) if start and end else None
+
+    single = _DATE_SINGLE_DAY.match(cleaned)
+    if single:
+        month, day, year = single.groups()
+        only = _iso(int(year), _MONTHS[month], int(day))
+        return (only, only) if only else None
+
+    return None
+
+
+def parse_prize_pool(text):
+    """
+    Reads "$2,744,104" as an integer number of dollars. Returns None for a cell
+    that is blank or not a plain dollar figure, so an unusual prize pool costs
+    that one field rather than the whole row.
+    """
+    if not text:
+        return None
+
+    match = re.fullmatch(r"\$\s*([\d,]+)", str(text).translate(_DASHES).strip())
+    if not match:
+        return None
+
+    return int(match.group(1).replace(",", ""))
+
+
+class _Tier1TableParser(HTMLParser):
+    """
+    Collects the body rows of the rendered tournaments table.
+
+    Rows are identified by class rather than by position, and the tournament
+    name by its own cell class, so the leading icon column can move or vanish
+    without silently shifting every field by one.
+    """
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.rows        = []
+        self._in_row     = False
+        self._cells      = []
+        self._text       = None
+        self._name       = None
+        self._name_index = None
+
+    def handle_starttag(self, tag, attrs):
+        attributes = dict(attrs)
+        classes    = attributes.get("class", "")
+
+        if tag == "tr":
+            self._in_row     = _TIER1_ROW_CLASS in classes
+            self._cells      = []
+            self._name       = None
+            self._name_index = None
+
+        elif tag == "td" and self._in_row:
+            self._text = []
+            if _TIER1_NAME_CELL_CLASS in classes:
+                # `data-sort-value` is the plain name; the cell's own text is
+                # the same string wrapped in a link, and occasionally decorated.
+                self._name       = attributes.get("data-sort-value")
+                self._name_index = len(self._cells)
+
+    def handle_data(self, data):
+        if self._text is not None:
+            self._text.append(data)
+
+    def handle_endtag(self, tag):
+        if not self._in_row:
+            return
+
+        if tag == "td" and self._text is not None:
+            self._cells.append(" ".join("".join(self._text).split()))
+            self._text = None
+
+        elif tag == "tr":
+            self._finish_row()
+            self._in_row = False
+
+    def _finish_row(self):
+        if self._name_index is None:
+            return
+
+        name = self._name or self._cells[self._name_index]
+        if not name:
+            return
+
+        # Date and prize follow the name cell. Anchoring to the name rather than
+        # to column 0 keeps the offsets right if the icon column changes.
+        date_cell  = self._get_cell(self._name_index + 1)
+        prize_cell = self._get_cell(self._name_index + 2)
+
+        window = parse_date_range(date_cell)
+        start, end = window if window else (None, None)
+
+        self.rows.append({
+            "name"          : name.strip(),
+            "start_date"    : start,
+            "end_date"      : end,
+            "prize_pool_usd": parse_prize_pool(prize_cell),
+        })
+
+    def _get_cell(self, index):
+        return self._cells[index] if index < len(self._cells) else None
+
+
+def parse_tier1_events(html):
+    """
+    Reads Liquipedia's rendered Tier 1 tournaments table into event records of
+    name, start date, end date and prize pool — every year on the page, newest
+    first, in the order the page lists them.
+
+    Returns an empty list for HTML that has no such table, rather than raising.
+    A page whose markup has changed is a discovery failure, and issue 07 makes
+    discovery failures non-fatal: the pipeline carries on from the calendar it
+    already has.
+    """
+    if not html:
+        return []
+
+    parser = _Tier1TableParser()
+    parser.feed(str(html))
+    parser.close()
+
+    return parser.rows
+
+
+def events_in_year(events, year):
+    """
+    Selects the events that *begin* in the given year.
+
+    Start date rather than end date, so an event running from December into
+    January belongs to the year it opened in — the same year its early matches
+    carry in the dataset.
+    """
+    return [
+        event for event in events
+        if event.get("start_date") and event["start_date"].startswith(f"{year}-")
+    ]

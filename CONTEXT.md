@@ -82,6 +82,14 @@ Zero is a time, not an absence. A first blood on the horn reads `first_blood_tim
 
 ### Pipeline
 
+**Tier 1 event** — a tournament on [Liquipedia's Tier 1 Tournaments list](https://liquipedia.net/dota2/Tier_1_Tournaments). This, and not OpenDota's `professional` flag, is what defines the dataset's scope (ADR-0001). An *event* is Liquipedia's unit; a **league** is OpenDota's. They are not the same object and are never matched by name.
+
+**Event window** — a Tier 1 event's start and end dates. The key everything resolves on, because the two sources name the same tournament differently — `BLAST SLAM VII` against `Blast Slam VII`, `PGL Wallachia Season 7` against `PGL Wallachia 2026 Season 7`. A league's matches falling inside an event's window is what identifies it.
+
+**Tier 1 calendar** — every Tier 1 event with its name, window and prize pool, read from Liquipedia's rendered tournaments table. 324 events across 2005–2027; 13 in 2026. Obtained from the free MediaWiki API under its terms of use, cached for a day, with `data/tier1_calendar.json` as the committed fallback. See ADR-0006.
+
+Only the **rendered tournaments table** is authoritative. The same page carries a Timeline template that deliberately includes Tier 2 events by the listed organisers; reading it is what once classified FISSURE Universe Episode 8 as Tier 1 and 1win Essence II as not. Episodes 4 and 6 of that series *are* Tier 1 — the distinction is per event, not per series.
+
 **Checkpoint** — `checkpoints/fetched_matches.json`, the set of match IDs already fetched. Match-level only: league match-ID lists are always re-fetched so new matches are detected.
 
 **Raw match** — the full untouched API response, roughly 386 KB per match, of which `players` is 87% and `objectives` — the only part the dashboard reads — is 1.4%. Historically stored in `data/matches.json`; that store is being retired in favour of the Standard record, with the raw sink retained as a **disabled seam** so full-fidelity capture can be switched back on for modelling. Never committed.
