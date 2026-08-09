@@ -34,7 +34,11 @@ Called a **tournament** in the dashboard UI; *league* is the API's word and the 
 
 ### Time
 
-**Patch** — the game version a match was played on. The meta shifts materially across patches, so patch is a primary comparison axis. Stored as a float (`7.39`, `7.4`, `7.41`) and displayed via `patch_label`, which restores the trailing zero (`7.4` → `"7.40"`).
+**Patch** — the game version a match was played on. The meta shifts materially across patches, so patch is a primary comparison axis.
+
+Two columns carry it. **`patch_label`** is the name as the API gives it — `"7.39"`, `"7.40"`, `"7.41"` — written by the pipeline as a string and read back as one. It is the only form the dashboard reads: displayed, grouped, filtered and sorted. **`patch`** holds the same value, but `read_csv` re-infers it as a float and drops the trailing zero of `7.40`. Nothing in the dashboard touches it; it survives in the CSV for anything that wants the number, and displaying it is a bug.
+
+A patch name is not guaranteed to be a number — OpenDota issues lettered revisions such as `7.40b` — so labels are ordered with `patch_sort_key`, never `float()` and never as plain strings, which would put `7.9` after `7.40`.
 
 **Game length / duration** — wall-clock match length. `duration_secs` is the raw value; `duration_mins` is the display value and the one used in charts.
 
@@ -52,6 +56,8 @@ Called a **tournament** in the dashboard UI; *league* is the API's word and the 
 
 **First blood** — the first hero kill of the match. `first_blood_time_mins` can be **negative, and negative values are valid data**: the match clock starts at zero at the horn, and teams contest runes and wards in the seconds before it. All 155 negative values in the dataset fall between −0.9 and −0.1 minutes, none below −1.0 — the pre-horn window exactly. Do not filter them. See ADR-0003, which records 133 of 1,605 as measured when it was written.
 
+Zero is a time, not an absence. A first blood on the horn reads `first_blood_time_mins: 0.0`; only a match with no recorded first blood is null. Four matches were blanked by a truthiness test before `tier1-pipeline-automation/04`.
+
 **Courier kill** — a killed courier. Per match, not per side.
 
 ### Kills
@@ -67,6 +73,8 @@ Called a **tournament** in the dashboard UI; *league* is the API's word and the 
 **Both lost barracks** — at least one barracks lost by *each* side. A proxy for a decisive, drawn-out game rather than a one-sided stomp.
 
 **Both teams Roshan** — at least one Roshan killed by each side.
+
+**Non-Captain's-Mode match** — a match played on any draft format other than Captain's Mode (`game_mode` 2), carried on every row as the boolean `non_captains_mode`. Twelve exist today, all All Pick. The flag exists so a draft-sensitive metric can say what it excluded; the match itself is never dropped. An unreported `game_mode` flags too — unknown is not evidence of Captain's Mode.
 
 **Over/under** — the calculator in the Head to Head and Drilldown tabs: given a threshold, what share of the filtered matches finished above it. The primary output for the betting-context audience.
 
@@ -114,7 +122,7 @@ Tournaments are ordered by **first match date, descending** — latest first —
 
 ## Column dictionary (`matches_flat.csv`)
 
-**Match info:** `match_id`, `league_id`, `league_name`, `patch`, `start_time`, `duration_secs`, `duration_mins`, `radiant_win`, `radiant_score`, `dire_score`, `game_mode`
+**Match info:** `match_id`, `league_id`, `league_name`, `patch`, `patch_label`, `start_time`, `duration_secs`, `duration_mins`, `radiant_win`, `radiant_score`, `dire_score`, `game_mode`, `non_captains_mode`
 
 **Teams:** `radiant_team_id`, `radiant_team_name`, `dire_team_id`, `dire_team_name`
 
@@ -130,7 +138,9 @@ Tournaments are ordered by **first match date, descending** — latest first —
 
 ### Added in `load_data()`
 
-`total_roshan`, `total_kills`, `total_barracks`, `both_lost_barracks`, `both_teams_roshan`, `patch_label`
+`total_roshan`, `total_kills`, `total_barracks`, `total_towers`, `both_lost_barracks`, `both_teams_roshan`
+
+`patch_label` is **not** among them — it comes from the CSV, and `load_data()` passes `core.CSV_DTYPES` to `read_csv` so it arrives as a string.
 
 ### Added in `build_team_perspective()`
 
@@ -141,6 +151,8 @@ Tournaments are ordered by **first match date, descending** — latest first —
 - One row per match in `matches_flat.csv`; exactly two team-perspective rows per match.
 - `total_kills = radiant_score + dire_score` — always recomputed, never read from the API.
 - A team-perspective row's `team_barracks_killed` equals the *opponent's* `*_barracks_lost`.
-- `game_mode` is overwhelmingly `2` (Captain's Mode); 12 matches are mode 1. Matches are **flagged, never dropped**, for their game mode. Any metric sensitive to draft format should filter to mode 2 or state that it doesn't.
+- `game_mode` is overwhelmingly `2` (Captain's Mode); 12 matches are mode 1, and each carries `non_captains_mode: True`. Matches are **flagged, never dropped**, for their game mode. Any metric sensitive to draft format should filter on the flag or state that it doesn't.
+- `patch_label` is a non-empty string in every row — `"Unknown"` where the API reported no patch. That is what lets it survive the CSV as a label rather than a number.
 - `first_blood_time_mins < 0` is **valid data** — a pre-horn kill, not an artefact. See ADR-0003.
+- An objective timing of `0` means the event happened on the horn; `null` means no such event was recorded. The two are never conflated.
 - A suspect match is excluded from averages but present in match history. Absence from a chart never means absence from the record. **Not yet implemented** — this is the target state, and lands in `tier1-pipeline-automation/05`. Today the five suspect matches are still in every average, and `meta.json` carries `excluded_count: null` to say so rather than claiming zero.

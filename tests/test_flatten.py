@@ -94,6 +94,7 @@ class TestFlattenMatch:
         assert row["radiant_score"] == 46
         assert row["dire_score"] == 33
         assert row["game_mode"] == 2
+        assert row["non_captains_mode"] is False
 
     def test_reads_both_team_identities(self, normal_match, patch_map):
         row = flatten_match(normal_match, patch_map)
@@ -135,8 +136,17 @@ class TestFlattenMatch:
         row = flatten_match(game_mode_1_match, patch_map)
 
         assert row["game_mode"] == 1
+        assert row["non_captains_mode"] is True
         assert row["match_id"] == 8514293820
         assert row["duration_mins"] == 40.7
+
+    def test_flags_an_unrecorded_game_mode_as_non_captains_mode(self, patch_map):
+        # An absent mode is not evidence of Captain's Mode. The flag exists to
+        # warn a draft-sensitive metric off the row, so "unknown" flags.
+        row = flatten_match({"match_id": 1}, patch_map)
+
+        assert row["game_mode"] is None
+        assert row["non_captains_mode"] is True
 
     def test_falls_back_to_side_names_for_anonymous_teams(self, patch_map):
         row = flatten_match({"match_id": 1, "radiant_team": None}, patch_map)
@@ -151,14 +161,37 @@ class TestFlattenMatch:
         row = flatten_match({"match_id": 1, "patch": 99}, patch_map)
 
         assert row["patch"] == "99"
+        assert row["patch_label"] == "99"
 
-    def test_blanks_a_timing_of_exactly_zero(self, patch_map):
-        # Characterising a known defect, not endorsing it. First blood at
-        # exactly t=0 is falsy, so the minutes column comes back None while the
-        # seconds column keeps the 0. Four matches in the dataset hit this; see
-        # the closing note of ADR-0003. tier1-pipeline-automation/04 owns the
-        # fix, and this test is here so that fix is visibly a change rather
-        # than a silent one.
+    def test_writes_the_patch_label_at_source(self, normal_match, patch_map):
+        # patch_label is written here, not derived by the dashboard, so the
+        # trailing zero of "7.40" survives instead of being rebuilt from a
+        # float. Patch id 60 is 7.41 in the injected map.
+        row = flatten_match(normal_match, patch_map)
+
+        assert row["patch_label"] == "7.41"
+
+    def test_maps_patch_id_zero_rather_than_reading_it_as_absent(self):
+        # Patch id 0 is 6.70, released in 2010. It is falsy, so a truthiness
+        # test drops a real patch — the same defect as the t=0 timing below.
+        row = flatten_match({"match_id": 1, "patch": 0}, {0: "6.70"})
+
+        assert row["patch"] == "6.70"
+        assert row["patch_label"] == "6.70"
+
+    def test_labels_a_missing_patch_as_unknown(self, patch_map):
+        # A row with no patch still needs a label: the column is a string in
+        # every row, which is what lets it round-trip through the CSV.
+        row = flatten_match({"match_id": 1}, patch_map)
+
+        assert row["patch"] is None
+        assert row["patch_label"] == "Unknown"
+
+    def test_keeps_a_timing_of_exactly_zero(self, patch_map):
+        # First blood at exactly t=0 is a real kill on the horn. The conversion
+        # used to test the raw value for truthiness, so the falsy 0 blanked the
+        # minutes column while the seconds column kept it; four matches in the
+        # dataset hit it. See the closing note of ADR-0003.
         row = flatten_match(
             {
                 "match_id": 1,
@@ -168,7 +201,7 @@ class TestFlattenMatch:
         )
 
         assert row["first_blood_time"] == 0
-        assert row["first_blood_time_mins"] is None
+        assert row["first_blood_time_mins"] == 0.0
 
 
 class TestBuildRows:

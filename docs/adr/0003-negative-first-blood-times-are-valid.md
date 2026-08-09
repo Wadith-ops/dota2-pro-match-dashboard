@@ -33,7 +33,9 @@ First-blood figures on the dashboard **will change** when these 133 matches rejo
 
 Consumers no longer filter on this column, which removes a rule every new chart had to remember.
 
-The related pipeline bug is separate and still real: `if raw_time else None` converts a legitimate `first_blood_time` of exactly 0 into null, which has affected two matches. That is a falsy-zero bug, not a data-validity question.
+The related pipeline bug is separate: `if raw_time else None` converted a legitimate `first_blood_time` of exactly 0 into null. That is a falsy-zero bug, not a data-validity question.
+
+**Fixed in `tier1-pipeline-automation/04` (2026-08-09).** The conversion now tests `is not None`. Four matches were affected by the time it was fixed, not the two counted here — the backfill added two more.
 
 ## Notes
 

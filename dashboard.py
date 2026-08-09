@@ -6,6 +6,8 @@ import plotly.graph_objects as go
 import streamlit as st
 from pathlib import Path
 
+from core import CSV_DTYPES, patch_sort_key
+
 st.set_page_config(page_title="Dota 2 Pro Match Analysis", layout="wide")
 
 DATA_PATH = Path(__file__).parent / "data" / "matches_flat.csv"
@@ -16,7 +18,9 @@ ANON_NAMES = {"Radiant", "Dire"}
 
 @st.cache_data(ttl=1800)
 def load_data():
-    df = pd.read_csv(DATA_PATH)
+    # CSV_DTYPES keeps patch_label a string; the pipeline writes it, this only
+    # stops pandas turning "7.40" back into 7.4 on the way in.
+    df = pd.read_csv(DATA_PATH, dtype=CSV_DTYPES)
     df["start_time"] = pd.to_datetime(df["start_time"])
     df["total_roshan"] = df["radiant_roshan_kills"] + df["dire_roshan_kills"]
     df["total_kills"] = df["radiant_score"] + df["dire_score"]
@@ -24,7 +28,6 @@ def load_data():
     df["total_towers"] = df["radiant_towers_lost"] + df["dire_towers_lost"]
     df["both_lost_barracks"] = (df["radiant_barracks_lost"] >= 1) & (df["dire_barracks_lost"] >= 1)
     df["both_teams_roshan"] = (df["radiant_roshan_kills"] >= 1) & (df["dire_roshan_kills"] >= 1)
-    df["patch_label"] = df["patch"].apply(lambda x: f"{x:.2f}" if pd.notna(x) else "Unknown")
     return df
 
 
@@ -39,6 +42,23 @@ def load_meta() -> dict:
     except (OSError, ValueError):
         return {}
     return meta if isinstance(meta, dict) else {}
+
+
+def by_patch(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Orders a per-patch frame by release.
+
+    Sorting the labels as plain strings puts "7.9" after "7.40" and only lands
+    "Unknown" last by accident of capitalisation. `core.patch_sort_key` is the
+    one definition of patch order, and every patch axis is built from it —
+    through here for a frame, through `patch_order` for a category list.
+    """
+    return df.sort_values("patch_label", key=lambda labels: labels.map(patch_sort_key))
+
+
+def patch_order(df: pd.DataFrame) -> list:
+    """The patch labels present in `df`, in release order."""
+    return sorted(df["patch_label"].dropna().unique(), key=patch_sort_key)
 
 
 def format_date(value) -> str | None:
@@ -88,7 +108,7 @@ def coverage_line(df: pd.DataFrame, meta: dict) -> str:
 
 
 @st.cache_data
-def build_team_perspective(df_hash: str, df: pd.DataFrame) -> pd.DataFrame:
+def build_team_perspective(df: pd.DataFrame) -> pd.DataFrame:
     base_cols = [
         "match_id", "league_name", "patch_label", "start_time",
         "duration_mins", "radiant_win", "first_roshan_team", "first_roshan_time_mins",
@@ -118,7 +138,7 @@ def build_team_perspective(df_hash: str, df: pd.DataFrame) -> pd.DataFrame:
 
 
 raw = load_data()
-team_persp_full = build_team_perspective(str(len(raw)), raw)
+team_persp_full = build_team_perspective(raw)
 
 # ── Sidebar ──────────────────────────────────────────────────────────────────
 st.sidebar.title("Filters")
@@ -135,10 +155,7 @@ all_teams = sorted(
 )
 selected_teams = st.sidebar.multiselect("Team", all_teams, default=[])
 
-all_patches = sorted(
-    raw["patch_label"].dropna().unique(),
-    key=lambda x: float(x) if x != "Unknown" else 0,
-)
+all_patches = patch_order(raw)
 selected_patches = st.sidebar.multiselect("Patch", all_patches, default=all_patches)
 
 side_filter = "Both sides"
@@ -289,7 +306,7 @@ with tab1:
     rosh_patch = (
         team_filtered.groupby("patch_label")
         .agg(avg_team=("team_roshan_kills", "mean"), avg_total=("total_roshan", "mean"))
-        .reset_index().sort_values("patch_label")
+        .reset_index().pipe(by_patch)
     )
     fig_rp = go.Figure([
         go.Bar(name="Team Kills", x=rosh_patch["patch_label"], y=rosh_patch["avg_team"], marker_color="#4C9BE8"),
@@ -322,7 +339,7 @@ with tab1:
     kills_patch = (
         team_filtered.groupby("patch_label")
         .agg(avg_team=("team_kills", "mean"), avg_total=("total_kills", "mean"))
-        .reset_index().sort_values("patch_label")
+        .reset_index().pipe(by_patch)
     )
     fig_kp = go.Figure([
         go.Bar(name="Team Kills", x=kills_patch["patch_label"], y=kills_patch["avg_team"], marker_color="#E88C4C"),
@@ -359,7 +376,7 @@ with tab1:
             avg_total=("total_barracks", "mean"),
             pct_both=("both_lost_barracks", "mean"),
         )
-        .reset_index().sort_values("patch_label")
+        .reset_index().pipe(by_patch)
     )
     barr_patch["pct_both_pct"] = barr_patch["pct_both"] * 100
 
@@ -439,6 +456,7 @@ with tab1:
                         title="Game Length by Patch",
                         labels={"patch_label": "Patch", "duration_mins": "Duration (min)"},
                         color="patch_label",
+                        category_orders={"patch_label": patch_order(filtered)},
                         color_discrete_sequence=px.colors.qualitative.Set2)
     fig_gl_box.update_layout(showlegend=False)
     col_gl2.plotly_chart(fig_gl_box, use_container_width=True)
@@ -551,7 +569,7 @@ with tab3:
             avg_duration=("duration_mins", "mean"),
         )
         .reset_index()
-        .sort_values("patch_label")
+        .pipe(by_patch)
     )
 
     patch_cols = st.columns(len(patch_stats))
@@ -604,6 +622,7 @@ with tab3:
                        title="Game Length Distribution by Patch",
                        labels={"patch_label": "Patch", "duration_mins": "Duration (min)"},
                        color="patch_label",
+                       category_orders={"patch_label": patch_order(filtered)},
                        color_discrete_sequence=px.colors.qualitative.Set2)
     fig_m4.update_layout(showlegend=False)
     col4.plotly_chart(fig_m4, use_container_width=True)
@@ -660,7 +679,7 @@ with tab4:
             st.divider()
 
             # ── Per-team comparative stats ────────────────────────────────
-            h2h_team = build_team_perspective("h2h_" + team_a + "_" + team_b + str(len(h2h)), h2h)
+            h2h_team = build_team_perspective(h2h)
             h2h_team = h2h_team[h2h_team["team_name"].isin([team_a, team_b])]
 
             comp = (
@@ -864,7 +883,7 @@ with tab5:
             avg_total_towers = dd["total_towers"].mean()
 
             if has_team:
-                dd_team_persp = build_team_perspective("dd_" + dd_team + str(len(dd)), dd)
+                dd_team_persp = build_team_perspective(dd)
                 dd_team_persp = dd_team_persp[dd_team_persp["team_name"] == dd_team]
                 avg_team_rosh   = dd_team_persp["team_roshan_kills"].mean()
                 avg_team_kills  = dd_team_persp["team_kills"].mean()

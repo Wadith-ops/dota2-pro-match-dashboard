@@ -24,6 +24,8 @@ Single-context — one `CONTEXT.md` plus `docs/adr/` at the repo root. See `docs
 
 **The coverage gap that motivated this work is closed** (`tier1-pipeline-automation/01`, 2026-08-09): the Esports World Cup 2026 (157 matches) and 1win Essence II (60 matches) are backfilled, and The International 2026 is configured ahead of time so its matches are picked up on the first daily run after it starts. The dashboard now states its own coverage (`02`), so the next gap is visible at the point of use rather than discovered two months later.
 
+**Patch, first blood and game mode are now correct at source** (`04`, 2026-08-09): the CSV carries `patch_label` as a string and `non_captains_mode` as a flag, and an objective at exactly `t=0` no longer blanks its own timing. Four on-the-horn first bloods rejoined the averages; the 155 pre-horn ones were already counted, since nothing ever implemented the filter ADR-0003 reversed.
+
 The underlying cause is not fixed. League coverage is still a hardcoded dict that cannot discover a tournament — the rest of `.scratch/tier1-pipeline-automation/` rebuilds coverage, correctness and hosting. Read ADR-0001 through 0004 before touching the pipeline.
 
 ## File Structure
@@ -77,11 +79,11 @@ Non-negotiable when writing any new analysis or chart:
 - **Never commit `data/matches.json`.** It is gitignored and must stay that way — including after the raw sink is disabled, since it may be re-enabled for modelling.
 - **Do not filter `first_blood_time_mins < 0`** — negative values are **valid pre-horn kills**, not artefacts. All 155 fall between −0.9 and −0.1 minutes. This reverses a previous rule; see ADR-0003.
 - **Exclude `team_name.isin(["Radiant", "Dire"])`** from every team-level calculation. These are fallback names for anonymous teams, not real teams.
-- **Display patch via `patch_label`, never `patch`.** The raw column is a float and renders `7.4` instead of `7.40`. Being fixed at source in `tier1-pipeline-automation/04`; until then the rule stands.
+- **Display patch via `patch_label`, never `patch`.** `patch_label` is a string written by the pipeline; `patch` is the same value re-inferred by `read_csv` as a float, which renders `7.4` instead of `7.40`. Read the CSV with `core.CSV_DTYPES` so the label stays a string, and never reformat it — `f"{x:.2f}"` throws on a lettered patch name such as `7.40b`. Order labels with `core.patch_sort_key`, not `float()`.
 - **Never drop matches to tidy a metric.** Flag them. Silently excluding rows — by `game_mode`, by data quality, by anything — is the class of behaviour that hid a whole tournament for two months. Suspect matches are to be excluded from *averages* but stay in match history — **not built yet**, it lands in `tier1-pipeline-automation/05`. Until then the five suspect matches sit in every average; do not assume they are filtered.
 - **Distribution charts use match-level rows** (`filtered`), never team-perspective rows (`team_filtered`) — the latter double-counts every match.
 - **Order tournaments by first match date, descending.** Computed once at startup as `league_start = raw.groupby("league_name")["start_time"].min()` and reused in the sidebar and the Drilldown tab.
-- **Note or filter `game_mode`** for anything draft-sensitive; the dataset is overwhelmingly mode 2 (Captain's Mode).
+- **Note or filter `non_captains_mode`** for anything draft-sensitive; the dataset is overwhelmingly mode 2 (Captain's Mode) and 12 matches are not. The flag is written at source on every row, so filter on it rather than re-deriving from `game_mode` — and say so in the chart when you do.
 - **Keep `requirements.txt` on flexible ranges.** Exact pins broke imports on Streamlit Cloud, which defaults to Python 3.14. `requirements-dev.txt` follows the same rule.
 - **New transformation logic goes in `core.py`, not the pipeline.** If it takes plain data and returns plain data, it belongs in the core and gets a test. Anything reaching the network, the filesystem, git or Streamlit stays in the shell. This is the seam the whole test suite hangs off — see `docs/adr/0005-pure-transform-core.md`.
 - **Nothing in the test suite may touch the network.** Fixtures are recorded payloads under `tests/fixtures/`; the whole suite runs offline in under a second, and it stays that way.
@@ -103,13 +105,14 @@ Streamlit + Plotly. 5-tab layout with global sidebar filters.
 - **5 — Drilldown**: independent tournament + team filters (at least one required); record/win % if a team is selected, 4 avg stat bar charts, match history, same probability stats and over/under calculator as H2H
 
 **Key helpers:**
-- `load_data()` — reads CSV, parses `start_time`, adds the derived columns listed in `CONTEXT.md`
-- `build_team_perspective(df_hash, df)` — pivots match rows into one row per team per match
+- `load_data()` — reads the CSV with `core.CSV_DTYPES`, parses `start_time`, adds the derived columns listed in `CONTEXT.md`. `patch_label` is **not** derived here — it comes from the CSV
+- `build_team_perspective(df)` — pivots match rows into one row per team per match
+- `by_patch(df)` / `patch_order(df)` — release order for a per-patch frame and for a category list. Both wrap `core.patch_sort_key`; every patch axis in the app comes from one of them
 - `load_meta()` — reads `data/meta.json`, returning `{}` when absent or malformed
 - `coverage_line(df, meta)` — builds the coverage caption. **Counts come from the CSV, never from `meta.json`**, so the line cannot advertise coverage the loaded page does not have; only `generated_at` and `excluded_count` are read from meta
 - `format_date()` — renders `5 Aug 2026`. Does not use `%-d`, which is not portable to Windows
 - `load_data()` is `@st.cache_data(ttl=1800)`; `build_team_perspective()` is `@st.cache_data` with no ttl
-- `df_hash=str(len(df))` is **redundant** — Streamlit hashes DataFrame arguments unless the parameter name starts with `_`, so the cache key already covers contents. Do not copy this pattern into new cached functions.
+- **Do not pass a hand-rolled cache key to a cached function.** Streamlit hashes DataFrame arguments unless the parameter name starts with `_`, so the contents are already in the key.
 - `ANON_NAMES = {"Radiant", "Dire"}`
 
 ## Transform Core (core.py)
@@ -117,7 +120,10 @@ Streamlit + Plotly. 5-tab layout with global sidebar filters.
 Pure functions only — plain data in, plain data out. No network, no filesystem, no clock, no Streamlit. Importing it has no side effects, which is what lets the tests exercise it offline.
 
 - `flatten_objectives(objectives)` — objectives array to counts and timings. A missing or empty array yields zeroes, indistinguishable from "nothing happened"; telling those apart is `tier1-pipeline-automation/05`.
-- `flatten_match(match, patch_map)` — one raw payload to one match row. **`patch_map` is a parameter, not a global** — building it is an API call, and injecting it is what makes this testable.
+- `flatten_match(match, patch_map)` — one raw payload to one match row. **`patch_map` is a parameter, not a global** — building it is an API call, and injecting it is what makes this testable. Writes `patch_label` (always a string, `"Unknown"` when the patch is absent) and `non_captains_mode` alongside the raw values.
+- `patch_sort_key(label)` — orders patch labels by release, tolerating lettered names and `"Unknown"`. Used by the dashboard's patch filter.
+- `CSV_DTYPES` — the dtypes `read_csv` needs so the CSV round-trips. One entry today: `patch_label` as `str`.
+- **Objective timings convert on `is not None`, never on truthiness.** A first blood at exactly `t=0` is a real event, and a pre-horn one is negative; both are lost by an `if raw_time` test.
 - `build_rows(matches, patch_map)` — one row per match, order preserved.
 - `coverage_meta(rows, generated_at)` — the `meta.json` record. **`generated_at` is passed in** because reading the clock is I/O. Counts come from the rows, where `start_time` is still a unix timestamp.
 
@@ -148,7 +154,8 @@ The shell around the core: network, files, checkpoints. Still organised in `# %%
 - `SAVE_RAW` — full raw API response saved to `matches.json`, enabling future hero/player extraction. Reads from an env var; defaults `true` locally, set `false` in CI.
 - Match-level checkpoint only — league match-ID lists are always re-fetched so new matches are detected.
 - Buildings counted via `goodguys`/`badguys` in the `key` field, not the `team` field, which is absent on `building_kill` events.
-- Patch IDs mapped dynamically from the OpenDota constants API at the start of `main()`, then passed down as an argument.
+- Patch IDs mapped dynamically from the OpenDota constants API at the start of `main()`, then passed down as an argument. The mapped name is written twice — as `patch`, which `read_csv` re-infers as a float, and as `patch_label`, the string the dashboard reads. `patch` has no consumer left in this repo; it stays because removing a column from a published CSV is a bigger change than issue `04` asked for, and it is a candidate for deletion, not for use.
+- A correctness fix belongs at source, in the row the pipeline writes, not in each consumer. `patch_label`, `non_captains_mode` and the `is not None` timing conversion all moved there in `04`; the workarounds they replaced were spread across the dashboard and the rules file.
 - Transformation is split from I/O at a single seam (`core.py`). The refactor was verified by rebuilding all 1,822 rows through the new core and confirming `matches_flat.csv` came out byte-identical.
 - Tests are characterisation tests first: they record what the pipeline does *today*, so the correctness fixes in `tier1-pipeline-automation/04` show up as intended changes rather than silent ones.
 - `radiant_towers_lost` / `dire_towers_lost` name buildings *destroyed*, framed as losses by the owner.

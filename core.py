@@ -9,7 +9,40 @@ never goes near the API.
 
 Importing this module has no side effects.
 """
+import re
 from datetime import datetime, timezone
+
+# The draft format the dataset is overwhelmingly played on. Anything else is
+# flagged on the row — never dropped from it.
+CAPTAINS_MODE = 2
+
+# The label for a match whose patch the API did not report. Every row carries a
+# patch label, so the column is a string throughout and survives the CSV.
+UNKNOWN_PATCH = "Unknown"
+
+# How the CSV must be read back. `patch_label` is written as "7.40" and pandas
+# would otherwise re-infer it as the float 7.4, losing the trailing zero — the
+# thing this column exists to preserve. Passed to `read_csv` by the dashboard.
+CSV_DTYPES = {"patch_label": str}
+
+_PATCH_NAME = re.compile(r"^(\d+)\.(\d+)(.*)$")
+
+
+def patch_sort_key(label):
+    """
+    Orders patch labels by release.
+
+    Sorting on `float(label)` throws on any name that is not a plain number,
+    and OpenDota does hand back lettered revisions such as "7.40b". Those sort
+    directly after the patch they revise; anything unparseable — "Unknown"
+    included — sorts last rather than raising.
+    """
+    parsed = _PATCH_NAME.match(str(label).strip())
+    if not parsed:
+        return (1, 0, 0, str(label))
+
+    major, minor, revision = parsed.groups()
+    return (0, int(major), int(minor), revision)
 
 
 def flatten_objectives(objectives):
@@ -118,12 +151,18 @@ def flatten_match(match, patch_map):
     building it is a network call. Injecting it is what lets this run offline.
     """
     # ── Patch mapping ─────────────────────────────────────────
+    # `patch_label` is the display form and is written here rather than rebuilt
+    # downstream, so "7.40" keeps its trailing zero instead of arriving as 7.4.
+    # `is not None`, not truthiness: patch id 0 is 6.70, a real patch.
     raw_patch = match.get("patch")
-    patch     = patch_map.get(raw_patch, str(raw_patch)) if raw_patch else None
+    patch     = (patch_map.get(raw_patch, str(raw_patch))
+                 if raw_patch is not None else None)
 
     # ── Duration conversions ──────────────────────────────────
     duration_secs = match.get("duration")
     duration_mins = round(duration_secs / 60, 1) if duration_secs else None
+
+    game_mode = match.get("game_mode")
 
     # ── Flat fields ───────────────────────────────────────────
     row = {
@@ -131,13 +170,18 @@ def flatten_match(match, patch_map):
         "league_id"         : match.get("leagueid"),
         "league_name"       : match.get("league_name"),
         "patch"             : patch,
+        "patch_label"       : patch if patch is not None else UNKNOWN_PATCH,
         "start_time"        : match.get("start_time"),
         "duration_secs"     : duration_secs,
         "duration_mins"     : duration_mins,
         "radiant_win"       : match.get("radiant_win"),
         "radiant_score"     : match.get("radiant_score"),
         "dire_score"        : match.get("dire_score"),
-        "game_mode"         : match.get("game_mode"),
+        "game_mode"         : game_mode,
+        # Flagged, not filtered. A draft-sensitive metric can exclude these
+        # rows deliberately; nothing here decides that for it. An unreported
+        # mode is not evidence of Captain's Mode, so it flags too.
+        "non_captains_mode" : game_mode != CAPTAINS_MODE,
     }
 
     # ── Team fields ───────────────────────────────────────────
@@ -153,9 +197,14 @@ def flatten_match(match, patch_map):
     obj_data = flatten_objectives(match.get("objectives"))
 
     # ── Convert objective timings to minutes ──────────────────
+    # `is not None`, not truthiness: an objective at exactly t=0 is a real
+    # event on the horn, and testing truthiness blanked it. Negative timings
+    # are real too — a pre-horn first blood keeps its sign (ADR-0003).
     for time_field in ["first_roshan_time", "first_blood_time"]:
         raw_time = obj_data.get(time_field)
-        obj_data[f"{time_field}_mins"] = round(raw_time / 60, 1) if raw_time else None
+        obj_data[f"{time_field}_mins"] = (
+            round(raw_time / 60, 1) if raw_time is not None else None
+        )
 
     row.update(obj_data)
 
