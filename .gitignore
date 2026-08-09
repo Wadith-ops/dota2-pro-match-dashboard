@@ -1,5 +1,7 @@
 data/matches.json
 checkpoints/
+.scratch/
+update_log.txt
 __pycache__/
 .claude/
 .venv/
