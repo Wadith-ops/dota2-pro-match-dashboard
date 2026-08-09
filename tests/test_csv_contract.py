@@ -3,7 +3,8 @@ The contract between the CSV the pipeline writes and the dashboard that reads it
 
 Two things have to hold across that boundary: `patch_label` comes back a string
 rather than a re-inferred float, and patch labels order by release even when a
-name is not a plain number. Both used to be the dashboard's problem, patched up
+name is not a plain number — `"Unknown"`, or a raw id for a patch the cached
+constants do not cover. Both used to be the dashboard's problem, patched up
 with `f"{x:.2f}"` on every read; they are the pipeline's problem now.
 
 The round trip goes through an in-memory buffer, so this file touches the
@@ -45,8 +46,9 @@ class TestCsvRoundTrip:
         assert pd.read_csv(buffer)["patch_label"].tolist() == [7.4]
 
     def test_a_non_numeric_patch_name_survives_intact(self):
-        # A lettered patch is a name, not a number. It reaches the dashboard
-        # unchanged rather than raising on the way through.
+        # A patch name is whatever the map says it is. OpenDota reports only
+        # gameplay patches today, so "7.40b" is a hypothetical — the column
+        # carries a name, not a number, and must not coerce one into the other.
         rows = build_rows([{"match_id": 1, "patch": 61}], {61: "7.40b"})
 
         assert round_trip(rows)["patch_label"].tolist() == ["7.40b"]
@@ -69,6 +71,9 @@ class TestPatchSortKey:
         ]
 
     def test_orders_a_lettered_patch_after_the_one_it_revises(self):
+        # Forward cover: hotfix names are not in the dataset today, only in
+        # Valve's patch list. If the pipeline ever resolves them, the axis is
+        # already in release order.
         assert sorted(["7.41", "7.40b", "7.40"], key=patch_sort_key) == [
             "7.40",
             "7.40b",

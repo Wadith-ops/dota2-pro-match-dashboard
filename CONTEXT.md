@@ -38,7 +38,9 @@ Called a **tournament** in the dashboard UI; *league* is the API's word and the 
 
 Two columns carry it. **`patch_label`** is the name as the API gives it — `"7.39"`, `"7.40"`, `"7.41"` — written by the pipeline as a string and read back as one. It is the only form the dashboard reads: displayed, grouped, filtered and sorted. **`patch`** holds the same value, but `read_csv` re-infers it as a float and drops the trailing zero of `7.40`. Nothing in the dashboard touches it; it survives in the CSV for anything that wants the number, and displaying it is a bug.
 
-A patch name is not guaranteed to be a number — OpenDota issues lettered revisions such as `7.40b` — so labels are ordered with `patch_sort_key`, never `float()` and never as plain strings, which would put `7.9` after `7.40`.
+A patch name is not guaranteed to be a number: `"Unknown"` is the label for a match with no patch, and a patch newer than the cached constants falls back to its raw id. So labels are ordered with `patch_sort_key`, never `float()` — which throws on the first — and never as plain strings, which would put `7.9` after `7.40`.
+
+**The patch recorded is the gameplay patch, not the hotfix.** OpenDota's `/constants/patch` has 61 entries and every name is a plain `d.d`; hotfixes do not appear in it. A match played on 7.40c is therefore recorded as `7.40`. Valve's own patch list (`dota2.com/datafeed/patchnoteslist`, 117 entries) does carry `7.40b`, `7.41a` and the rest with release timestamps, so hotfix resolution by `start_time` is available if the finer grain is ever wanted — at the cost of splitting today's three patch buckets into nine, four of them under 65 matches. Not implemented.
 
 **Game length / duration** — wall-clock match length. `duration_secs` is the raw value; `duration_mins` is the display value and the one used in charts.
 

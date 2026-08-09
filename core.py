@@ -32,10 +32,15 @@ def patch_sort_key(label):
     """
     Orders patch labels by release.
 
-    Sorting on `float(label)` throws on any name that is not a plain number,
-    and OpenDota does hand back lettered revisions such as "7.40b". Those sort
-    directly after the patch they revise; anything unparseable — "Unknown"
-    included — sorts last rather than raising.
+    Not every label is a number. "Unknown" is the label for a match with no
+    patch, and a patch newer than the cached constants falls back to its raw
+    id — `float()` throws on the first and misplaces the second. Sorting the
+    labels as plain strings is no better: it puts "7.9" after "7.40".
+
+    Lettered hotfix names ("7.40b") sort directly after the patch they revise.
+    OpenDota does not report them today — its constants are gameplay-patch
+    granularity only — so that branch is there for the day the pipeline
+    resolves hotfixes, not for data it currently sees.
     """
     parsed = _PATCH_NAME.match(str(label).strip())
     if not parsed:
