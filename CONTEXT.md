@@ -28,9 +28,13 @@ The consequence: a distribution chart (histogram, box, violin) over a match-leve
 
 Called a **tournament** in the dashboard UI; *league* is the API's word and the column name (`league_name`). Both refer to the same thing.
 
-**Ledger** — `leagues.json`, the record of every known league and its verdict: `active`, `rejected` or `pending`. It replaces the hardcoded `ALL_LEAGUES` dict so that an excluded league is *visibly excluded* rather than merely absent — the distinction whose absence hid the Esports World Cup for two months. Verdicts are reversible. (Lands in `tier1-pipeline-automation/06`.)
+**Ledger** — `data/leagues.json`, the record of every league OpenDota knows about and this project's verdict on each: `active`, `rejected` or `pending`. It replaced the hardcoded `ALL_LEAGUES` dict so that an excluded league is *visibly excluded* rather than merely absent — the distinction whose absence hid the Esports World Cup for two months. Verdicts are reversible: changing one word covers or drops a tournament on the next run. 10,050 leagues today, 15 of them active.
 
-**Known gap** — a Tier 1 event on Liquipedia's list with no matching OpenDota league. Distinct from a rejected league: a gap is coverage the project *wants* and does not yet have.
+**Verdict** — what the ledger says about a league. **`active`** is fetched. **`rejected`** is a decision on record not to cover it — the great majority, and the state that makes absence legible. **`pending`** is a league OpenDota has listed since the ledger was seeded, awaiting a verdict; it is the only state that means "nobody has looked at this yet", which is why nothing is ever *seeded* pending.
+
+**Seeding by existence** — the rule that makes `pending` mean something. Every league in OpenDota's response at seed time was decided then and there, so only ids appearing afterwards can be pending. Never by id range: The International 2013 is league `65006`, above every 2026 league, so an id cutoff would mark the whole back catalogue as new. See ADR-0001.
+
+**Known gap** — a Tier 1 event on Liquipedia's list with no matching OpenDota league. Distinct from a rejected league: a gap is coverage the project *wants* and does not yet have. Distinct again from a pending league, which is data OpenDota has and the project has not yet judged.
 
 ### Time
 
@@ -114,6 +118,8 @@ The **latest match date** is the load-bearing field. A run that fetches nothing 
 
 ## Leagues covered
 
+The authoritative list is the `active` entries in `data/leagues.json`; this table mirrors them for reading. When the two disagree, the ledger wins and the table is wrong.
+
 | ID    | Name                        |
 |-------|-----------------------------|
 | 17419 | Slam IV                     |
@@ -134,7 +140,7 @@ The **latest match date** is the load-bearing field. A run that fetches nothing 
 
 The International 2026 is configured but holds **zero matches** — it starts 13 Aug 2026, and its matches are picked up on the first daily run after that. A configured league with no matches is normal, not a fault.
 
-This table is superseded by the ledger (`leagues.json`) once `tier1-pipeline-automation/06` lands.
+A league's **name here is the name the dashboard shows**, and it comes from the ledger rather than from OpenDota — which calls league 17419 "SLAM IV" where the dataset has said "Slam IV" for 96 matches. The pipeline writes the ledger's name onto every match row as `league_name`, so changing it in the ledger renames the tournament everywhere the next time the CSV is rebuilt, and leaving it to OpenDota would let a rebrand split one tournament into two.
 
 Tournaments are ordered by **first match date, descending** — latest first — everywhere they are listed. Never alphabetically.
 

@@ -16,7 +16,7 @@ import time
 import json
 import os
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 import pandas as pd
 
@@ -24,39 +24,30 @@ from core import (
     FETCH_COMPLETE,
     FETCH_HELD,
     FETCH_UNPARSED,
+    LEDGER_ACTIVE,
     SUSPECT_RETRY_DAYS,
+    active_leagues,
     build_rows,
     classify_fetch,
     coverage_meta,
+    format_ledger,
     index_by_match_id,
+    ledger_problems,
+    merge_discovered_leagues,
+    seed_ledger,
     store_match,
     suspect_reasons,
+    verdict_counts,
 )
 
 # %%
 # # Step 1 - Configuration and Setup
 
-# League definitions
-ALL_LEAGUES = {
-    17419: "Slam IV",
-    18863: "FISSURE PLAYGROUND 2",
-    18920: "PGL Wallachia 2025 Season 6",
-    17420: "Slam V",
-    18988: "DreamLeague Season 27",
-    19099: "BLAST Slam VI",
-    19269: "DreamLeague Season 28",
-    19435: "PGL Wallachia 2026 Season 7",
-    19422: "ESL One Birmingham 2026",
-    19543: "PGL Wallachia 2026 Season 8",
-    19696: "DreamLeague Season 29",
-    19101: "Blast Slam VII",
-    19785: "Esports World Cup 2026",
-    20009: "1win Essence II",
-    19719: "The International 2026"
-}
-
-# Only fetch the below leagues for this run
-ACTIVE_LEAGUES = list(ALL_LEAGUES.keys())
+# Which leagues get fetched is `data/leagues.json`, not a dict here. A dict
+# could only say what to fetch; the ledger records a verdict per league, so a
+# tournament this project decided against is visibly rejected rather than
+# merely absent — the distinction whose absence hid the Esports World Cup for
+# two months. See `core.seed_ledger` and ADR-0001.
 
 #File paths
 _HERE = Path(__file__).parent
@@ -64,6 +55,7 @@ DATA_DIR = str(_HERE / "data")
 CHECKPOINT_DIR = str(_HERE / "checkpoints")
 
 MATCHES_FILE = os.path.join(DATA_DIR, "matches.json")
+LEDGER_FILE = os.path.join(DATA_DIR, "leagues.json")
 MATCH_CHECKPOINT = os.path.join(CHECKPOINT_DIR, "fetched_matches.json")
 # Matches given up on: suspect, out of retries, and never to be fetched again.
 UNPARSED_CHECKPOINT = os.path.join(CHECKPOINT_DIR, "unparsed_matches.json")
@@ -150,6 +142,131 @@ def fetch_url(url):
     except Exception as e:
         print(f" Error fetching {url}: {e}")
         return None
+
+# %%
+# # Step 2b - The league ledger
+
+
+def read_ledger():
+    """
+    The ledger as stored, or None when the file will not parse into one.
+
+    A wrong *shape* counts as unparseable, not as an empty ledger. `{"leagues":
+    {}}` reads as no leagues, and treating that as real would let discovery
+    append ten thousand pending entries over a file whose verdicts are all
+    still sitting there, one syntax error away from being recovered.
+    """
+    try:
+        with open(LEDGER_FILE, "r", encoding="utf-8") as f:
+            ledger = json.load(f)
+    except (json.JSONDecodeError, OSError) as error:
+        print(f"  Could not read the league ledger: {error}")
+        return None
+
+    if not isinstance(ledger, dict) or not isinstance(ledger.get("leagues"), list):
+        print("  The league ledger is not the expected shape")
+        return None
+
+    return ledger
+
+
+def write_ledger(ledger):
+    """Writes the ledger, one league per line, ready to review in a diff."""
+    with open(LEDGER_FILE, "w", encoding="utf-8") as f:
+        f.write(format_ledger(ledger))
+
+
+def fetch_all_leagues():
+    """
+    Every league OpenDota knows about. One call, ~10,000 leagues.
+
+    This is what makes a new tournament discoverable: an id in this list that
+    the ledger has never seen is recorded as pending rather than passing
+    unnoticed. Returns None on failure, like every other fetch.
+
+    A payload that is not a list counts as a failure. OpenDota can answer 200
+    with an error object, and a dict handed on to the ledger iterates as its
+    own keys — which is an AttributeError halfway through a run rather than a
+    fetch that reported it had failed.
+    """
+    leagues = fetch_url(f"{BASE_URL}/leagues")
+
+    if leagues is not None and not isinstance(leagues, list):
+        print(f"  The league list came back as {type(leagues).__name__}, not a list")
+        return None
+
+    return leagues
+
+
+def load_ledger():
+    """
+    The ledger for this run, refreshed against OpenDota's league list.
+
+    Four cases, and the ordering matters:
+
+    - **No ledger file.** Seed one from the league list, with nothing active.
+      Every league in existence is decided at that moment, so only ids
+      appearing afterwards can be pending. Nothing is fetched this run: which
+      leagues to cover is a judgement, and a pipeline that guessed would be the
+      hardcoded dict again with extra steps.
+    - **A ledger that will not parse.** Fetch nothing and write nothing. Every
+      verdict in that file is recoverable by fixing the syntax, and none of it
+      survives being written over.
+    - **Ledger, no league list.** Fetch what it already says. Discovery going
+      quiet must never stop match fetching.
+    - **Both.** Record anything new as pending, and write the file only if that
+      changed something — the file is ten thousand lines and this runs daily.
+    """
+    if not os.path.exists(LEDGER_FILE):
+        api_leagues = fetch_all_leagues()
+
+        # `not`, not `is None` — the opposite of the rule the match loop
+        # follows. An empty *match* list is a real answer, from a league that
+        # has not started. An empty *league* list is not: OpenDota has ten
+        # thousand. Seeding on it would write a ledger holding nothing, and the
+        # next run would greet all 10,050 real leagues as newly discovered.
+        if not api_leagues:
+            print("  No league ledger, and the league list came back empty")
+            return {"leagues": []}
+
+        ledger = seed_ledger(api_leagues, seeded_on=date.today().isoformat())
+        write_ledger(ledger)
+        print(f"  Seeded {LEDGER_FILE} with {len(ledger['leagues'])} leagues, "
+              f"all rejected")
+        print(f"  Mark the leagues to cover as '{LEDGER_ACTIVE}' and run again")
+        return ledger
+
+    ledger = read_ledger()
+
+    if ledger is None:
+        print(f"  Fix {LEDGER_FILE} — nothing is fetched or written until it parses")
+        return {"leagues": []}
+
+    api_leagues = fetch_all_leagues()
+
+    if api_leagues is None:
+        print("  Could not fetch the league list — no discovery this run")
+    else:
+        merged, discovered = merge_discovered_leagues(ledger, api_leagues)
+
+        if merged != ledger:
+            write_ledger(merged)
+            ledger = merged
+
+        if discovered:
+            print(f"  {len(discovered)} league(s) new since the last run, "
+                  f"recorded as pending and awaiting a verdict:")
+            for entry in discovered:
+                print(f"    {entry['league_id']}  {entry['name']}")
+
+    for problem in ledger_problems(ledger):
+        print(f"  Ledger problem: {problem}")
+
+    counts = sorted(verdict_counts(ledger).items(), key=lambda item: str(item[0]))
+    print("  Ledger: " + ", ".join(f"{count} {verdict}" for verdict, count in counts))
+
+    return ledger
+
 
 # %%
 # # Step 3a - Checkpoints
@@ -252,14 +369,23 @@ def checkpoint_or_hold(match_data, fetched_matches, unparsed_matches, now):
     return verdict
 
 
-def run_pipeline():
+def run_pipeline(leagues):
     """
-    Main pipeline function. Loops over ACTIVE_LEAGUES, fetches match IDs,
-    fetches match details, and saves everything to disk.
+    Main pipeline function. Loops over the leagues the ledger marks active,
+    fetches match IDs, fetches match details, and saves everything to disk.
+
+    `leagues` is `{league_id: name}` — the name is the ledger's and is written
+    onto every match row, so it is passed in rather than read back from the API
+    per league.
     """
     print("=" * 60)
     print("Starting pipeline...")
     print("=" * 60)
+
+    if not leagues:
+        print("The ledger marks no league active — nothing to fetch.")
+        print("=" * 60)
+        return
 
     # Load checkpoints and existing data
     fetched_matches   = load_checkpoint(MATCH_CHECKPOINT)
@@ -279,9 +405,8 @@ def run_pipeline():
     print()
 
     # Loop over active leagues
-    for league_id in ACTIVE_LEAGUES:
+    for league_id, league_name in leagues.items():
 
-        league_name = ALL_LEAGUES.get(league_id, "Unknown League")
         print(f"Processing league: {league_name} ({league_id})")
 
         # Step 3a — always fetch match ID list to catch new matches
@@ -426,7 +551,7 @@ def main():
     patch_map = get_patch_map()
     print(f"Patch map loaded: {patch_map}")
 
-    run_pipeline()
+    run_pipeline(active_leagues(load_ledger()))
     return build_dataframe(patch_map)
 
 

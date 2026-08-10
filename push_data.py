@@ -38,6 +38,10 @@ DEPLOYED = [
     # when it does: the Upcoming tab reads it from the deployed app, and a
     # refresh left unstaged would sit dirty in the working tree indefinitely.
     "data/tier1_calendar.json",
+    # The league ledger. The pipeline appends leagues it has newly discovered,
+    # and that is news — a pending entry left unstaged is a candidate tournament
+    # nobody ever sees, which is the failure the ledger exists to prevent.
+    "data/leagues.json",
     "dashboard.py",
 ]
 present = [p for p in DEPLOYED if (HERE / p).exists()]

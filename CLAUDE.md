@@ -17,7 +17,7 @@ Single-context — one `CONTEXT.md` plus `docs/adr/` at the repo root. See `docs
 ## Current Status
 
 - 1,822 matches across 14 Tier 1 tournaments (Oct 2025 – Aug 2026), patches 7.39 / 7.40 / 7.41
-- 15 leagues configured — The International 2026 is in `ALL_LEAGUES` but holds no matches until it starts 13 Aug 2026
+- 15 leagues marked `active` in `data/leagues.json` — The International 2026 is one of them but holds no matches until it starts 13 Aug 2026
 - Live: https://dota2-pro-match-dashboard-9kymmqtgrymab25ofas4oh.streamlit.app/
 - Repo: https://github.com/Wadith-ops/dota2-pro-match-dashboard
 - Phases 1–2 shipped; Phase 3 (trend views) planned — see `PLAN.md`
@@ -28,7 +28,9 @@ Single-context — one `CONTEXT.md` plus `docs/adr/` at the repo root. See `docs
 
 **Unparsed matches no longer count as zeroes** (`05`, 2026-08-10): every row carries `is_suspect` and `suspect_reason`, the five known matches are out of the figures and still in match history, and a match fetched before OpenDota parsed its replay is held out of the checkpoint and re-fetched for five days. Objective averages rose 0.28% dataset-wide and 2.78% within DreamLeague Season 29 — see ADR-0007.
 
-The underlying cause is not fixed. League coverage is still a hardcoded dict that cannot discover a tournament — the rest of `.scratch/tier1-pipeline-automation/` rebuilds coverage, correctness and hosting. Read ADR-0001 through 0004 before touching the pipeline.
+**Coverage is a ledger, not a dict** (`06`, 2026-08-10): `data/leagues.json` holds all 10,050 leagues OpenDota knows about, 15 `active` and the rest `rejected`, and the pipeline fetches the active ones. A league OpenDota adds after the seed date is recorded `pending` on the next run, so a new tournament arrives as a line in a diff rather than as nothing at all. Changing a verdict is a one-word edit that takes effect on the next run.
+
+The underlying cause is not fully fixed. The ledger records coverage decisions but does not *make* them: nothing yet reads a Tier 1 event and works out which league it is, so a `pending` entry still waits for a human. That resolver is `08`; the rest of `.scratch/tier1-pipeline-automation/` rebuilds correctness and hosting. Read ADR-0001 through 0004 before touching the pipeline.
 
 ## File Structure
 
@@ -60,6 +62,7 @@ project/
 │   └── fixtures/             # gzipped raw OpenDota payloads, committed
 ├── data/
 │   ├── matches.json          # raw match data — LOCAL ONLY, do not commit
+│   ├── leagues.json          # the league ledger — committed, edited in PRs
 │   ├── matches_flat.csv      # flattened data — committed, this is what deploys
 │   ├── meta.json             # coverage record — committed, read by the dashboard
 │   └── tier1_calendar.json   # Tier 1 fallback calendar — committed, generated not typed
@@ -97,6 +100,7 @@ Non-negotiable when writing any new analysis or chart:
 - **Nothing in the test suite may touch the network.** Fixtures are recorded payloads under `tests/fixtures/`; the whole suite runs offline in under a second, and it stays that way.
 - **Liquipedia's four access conditions are code, not intent.** Any new call to `liquipedia.net` goes through `liquipedia.py` so it inherits the User-Agent, the 30-second `action=parse` interval and the cache. Anything displaying calendar data renders `core.LIQUIPEDIA_ATTRIBUTION`. These are the terms of the free API — see ADR-0006.
 - **A Liquipedia page that parses to zero rows is a failed fetch, not an empty Tier 1 list.** Treating it as real would report every tournament missing at once, the first time a class name changes. `get_tier1_events` falls back and reports its `source`; never infer health from an empty list.
+- **Coverage is `data/leagues.json`, and every league in it carries a verdict.** Never reintroduce a hardcoded league list, and never remove an entry to stop fetching a league — set its verdict to `rejected`, which is the record that it was considered. Deleting the entry makes it `pending` again on the next run, and a league that keeps reappearing as a candidate is a decision that was never taken.
 - **Closing an issue is three moves, not one:** set `status: done`/`dropped`, move the file to `.scratch/_done/` mirroring its path, and move its row to Closed in `.scratch/index.md` — all in the same turn. See `docs/agents/issue-tracker.md`.
 
 ## Dashboard (dashboard.py)
@@ -143,16 +147,25 @@ Pure functions only — plain data in, plain data out. No network, no filesystem
 - **Objective timings convert on `is not None`, never on truthiness.** A first blood at exactly `t=0` is a real event, and a pre-horn one is negative; both are lost by an `if raw_time` test.
 - `build_rows(matches, patch_map)` — one row per match, order preserved.
 - `coverage_meta(rows, generated_at)` — the `meta.json` record. **`generated_at` is passed in** because reading the clock is I/O. Counts come from the rows, where `start_time` is still a unix timestamp; `excluded_count` is how many of them are suspect.
+- `active_leagues(ledger)` — `{league_id: name}` for the leagues to fetch. **The name is the ledger's, not OpenDota's**: it is written onto every match row as `league_name` and grouped on by the dashboard, so an upstream rename — `SLAM IV` where the dataset has said `Slam IV` for 96 matches — must not split a season into two tournaments.
+- `seed_ledger(api_leagues, active_names, seeded_on)` — builds the ledger. **Seeding is by existence**: every league in the response is decided here, `active` or `rejected`, and nothing is seeded `pending`. Never by id range — The International 2013 is id `65006`, above every 2026 league.
+- `merge_discovered_leagues(ledger, api_leagues)` — returns `(ledger, discovered)`. Ids the ledger has never seen become `pending`; existing entries are copied through untouched, verdict and name alike.
+- `ledger_problems(ledger)` / `verdict_counts(ledger)` — what the run prints about the ledger it loaded. A hand-edited verdict can be misspelled, and a misspelling fails the way a rejection does, so it is reported rather than left silent.
+- `format_ledger(ledger)` — the file as text, **one league per line**. `json.dump(indent=...)` would turn 10,050 entries into 50,000 lines and a verdict change into a five-line diff.
 
 ## Data Pipeline (opendota_pipeline.py)
 
 The shell around the core: network, files, checkpoints. Still organised in `# %%` cells:
 
-1. Config, league definitions, `get_patch_map()` and `ensure_directories()` — both **called from `main()`, never at import**
-2. Rate-limited fetcher (`fetch_url`), 1s delay, 60 calls/min free tier
+1. Config, paths, `get_patch_map()` and `ensure_directories()` — both **called from `main()`, never at import**
+2. Rate-limited fetcher (`fetch_url`), 1s delay, 60 calls/min free tier; **2b** the ledger — `read_ledger` / `write_ledger` / `fetch_all_leagues` / `load_ledger`
 3. **3a** checkpoint load/save; **3b** match detail fetcher
-4. Main loop, match-level checkpoint only, upserts into `matches.json` via `core.store_match`
+4. Main loop over the active leagues, match-level checkpoint only, upserts into `matches.json` via `core.store_match`
 5. `build_dataframe(patch_map)` reads the raw JSON, calls `core.build_rows`, exports `matches_flat.csv`, then writes `data/meta.json` via `write_meta()`
+
+**`load_ledger()` is the whole coverage decision, and it has four cases.** No ledger: seed one from OpenDota's league list with nothing active, and fetch nothing this run — which leagues to cover is a judgement, and a pipeline that guessed would be the hardcoded dict again. A ledger that will not parse: fetch nothing and **write nothing**, because every verdict in that file survives a syntax error and none of it survives being written over. No league list: fetch what the ledger already says; discovery going quiet must never stop match fetching. Both: record anything new as `pending` and rewrite the file **only if that changed something**, because it is 10,000 lines and this runs daily. `tests/test_ledger_shell.py` holds all four.
+
+**An empty `/leagues` response is a failure, which is the opposite of the rule the match loop follows.** A league's *match* list is legitimately `[]` before the event starts, so that loop tests `is None`. The *league* list is not — OpenDota has 10,050 — so the seed path tests `not api_leagues`. Seeding on an empty list writes a ledger holding nothing, and the next run greets every real league as newly discovered. `fetch_all_leagues()` likewise rejects a non-list payload: OpenDota can answer 200 with an error object, and a dict passed on to the ledger iterates as its own keys.
 
 **`checkpoint_or_hold()` acts on `core.classify_fetch` and is the re-fetch mechanism.** A suspect match inside its five-day window is deliberately *not* added to `fetched_matches`, so the next run treats it as unfetched and fetches it again; once the window closes it is checkpointed, recorded in `checkpoints/unparsed_matches.json`, and never retried. Each run tallies complete / held / permanently unparsed and prints the three counts. Do not "fix" the missing `add()` — the absence is the feature, and `tests/test_suspect.py::TestClassifyFetch` is what holds it.
 
@@ -162,7 +175,7 @@ The shell around the core: network, files, checkpoints. Still organised in `# %%
 
 **To re-fetch a league's matches** (e.g. objectives were missing): remove those match IDs from `checkpoints/fetched_matches.json` *and* those records from `data/matches.json`, then re-run.
 
-**API:** OpenDota (`https://api.opendota.com/api`), 60 calls/min and 50k/month on free tier. Endpoints: `/leagues/{id}/matches`, `/matches/{id}`, `/constants/patch`.
+**API:** OpenDota (`https://api.opendota.com/api`), 60 calls/min and 50k/month on free tier. Endpoints: `/leagues`, `/leagues/{id}/matches`, `/matches/{id}`, `/constants/patch`.
 
 ## Liquipedia Client (liquipedia.py)
 
@@ -173,13 +186,14 @@ Obtains the Tier 1 calendar that defines the dataset's scope. Parsing lives in `
 - `ParseRateLimiter` — one `action=parse` per 30s. Clock and sleep injected. One call per run is far inside the limit; the limiter is for issue 14, which walks several years in one run. **`fetch_tier1_html` defaults to the process-wide `_PARSE_LIMITER`** — building one per call gives each an empty history and enforces nothing, which is how the interval once held in the tests and nowhere else.
 - `fetch_tier1_html(page, limiter, get)` — returns HTML or `None`. **Never raises.** A MediaWiki error arrives as HTTP 200 with an `error` key, so the status code alone does not mean success.
 - `get_tier1_events(...)` — returns `{"events": [...], "source": ...}`. Degrades fresh cache → network → stale cache → committed seed calendar. **Read the `source`**; an empty list is not a health signal.
-- `data/tier1_calendar.json` — the committed fallback, generated from the same table rather than typed. Issue 06's ledger absorbs it.
+- `data/tier1_calendar.json` — the committed fallback, generated from the same table rather than typed. It stayed its own file rather than being absorbed into the ledger as the spec expected: the calendar is Liquipedia's list of *events*, keyed by date window, and `data/leagues.json` is OpenDota's list of *leagues* with this project's verdict on each. Joining them is the resolver, `tier1-pipeline-automation/08`. See ADR-0008.
 - The cache is 24h, in `checkpoints/` and local-only.
 
 ## Hosting
 
 - Streamlit Community Cloud, redeploys automatically on every push to `master`
-- Three data files are committed: `matches_flat.csv`, `meta.json` and `tier1_calendar.json`. `matches.json` and the Liquipedia cache stay local. All three are in the `DEPLOYED` list in `push_data.py` **and** `auto_update.py` — adding a new deployed data file means editing both.
+- Four data files are committed: `matches_flat.csv`, `meta.json`, `tier1_calendar.json` and `leagues.json`. `matches.json` and the Liquipedia cache stay local. All four are in the `DEPLOYED` list in `push_data.py` **and** `auto_update.py` — adding a new deployed data file means editing both.
+- `auto_update.py` exits early when nothing changed, and **the ledger counts as change alongside the CSV**. A run that fetched no matches but discovered a new league has found the one thing this job exists to notice; testing the CSV alone would leave that `pending` entry dirty in the working tree until somebody happened to look.
 - Streamlit may not redeploy on CSV-only pushes — always use `push_data.py`, which bumps a `# data: YYYY-MM-DD` comment in `dashboard.py` so a `.py` file always changes. The `ttl=1800` on `load_data()` is the safety net.
 
 ## Key Technical Decisions
@@ -197,18 +211,24 @@ Obtains the Tier 1 calendar that defines the dataset's scope. Parsing lives in `
 - **An empty league match list is not a failure.** `fetch_url()` returns `None` on failure and a list on success, so the main loop tests `if data is None`, never `if not data`. A league added before it starts — The International 2026 — legitimately returns `[]`, and truthiness would log it as a failed fetch.
 - Tier 1 scope is read from Liquipedia's free MediaWiki API, whose terms explicitly permit it; the paid v3 API was never needed. The four access conditions are enforced in code rather than intended — see ADR-0006. The manually transcribed calendar option survives as the *fallback*, so a markup change costs freshness rather than the whole list.
 - Liquipedia and OpenDota name the same tournament differently — `BLAST SLAM VII` against `Blast Slam VII`, `PGL Wallachia Season 7` against `PGL Wallachia 2026 Season 7`. This is why resolution is by date window (ADR-0001) and why the calendar carries dates as its primary key of use.
+- The ledger holds **all 10,050 leagues**, not just the interesting ones, because "decided" has to be recorded for every id in existence — otherwise every run reports thousands of leagues as newly discovered. That is what makes the file a megabyte, and why it is written one league per line: a verdict change is then a one-line diff in a pull request, which is where the file is reviewed.
+- The ledger's `tier1_event` is `null` on every row today. Resolving a league to a Liquipedia event is `08`; the field is seeded empty rather than guessed, because guessing it by name is the one thing ADR-0001 rules out.
+- The ledger was seeded with the *curated* league names from the retired `ALL_LEAGUES` dict, not OpenDota's. `league_name` is written onto every match row and grouped on by the dashboard, so seeding "SLAM IV" over "Slam IV" would have split that tournament in two the next time a match was fetched.
+- Replacing the dict with the ledger was verified by running the full pipeline and confirming `matches_flat.csv` came out byte-identical across all 1,822 rows.
 
 ## Adding New Leagues
 
 A league belongs in the dataset if it is on [Liquipedia's Tier 1 Tournaments list](https://liquipedia.net/dota2/Tier_1_Tournaments) — not if OpenDota calls it `professional`, which 2,468 leagues are. Qualifiers, Division 2 and regional events are out. See ADR-0001.
 
-Current process, until the ledger lands (`tier1-pipeline-automation/06`):
+Current process, until the resolver lands (`tier1-pipeline-automation/08`):
 
-1. Add to the `ALL_LEAGUES` dict in Step 1
-2. `ACTIVE_LEAGUES = list(ALL_LEAGUES.keys())` handles the rest
+1. Find the league's entry in `data/leagues.json` — every league OpenDota knows about is already in there, `rejected` or `pending`
+2. Change its `verdict` to `active`, and set `name` to the name the tournament should carry in the dashboard
 3. Run the pipeline — only new matches are fetched
 4. Run `python push_data.py`
 5. Add the league to the table in `CONTEXT.md`
+
+Step 2 is the whole change. Nothing else needs editing, and the reverse — `active` back to `rejected` — works the same way and takes effect on the next run.
 
 To find the OpenDota league id for a Tier 1 event, **match on dates, never on names** — the two sources name tournaments differently. Take the event's date window from Liquipedia and find the league whose matches fall inside it; if more than one does, the right one is the league with the most teams already in the dataset.
 

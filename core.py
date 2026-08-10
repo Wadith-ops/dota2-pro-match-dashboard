@@ -9,6 +9,7 @@ never goes near the API.
 
 Importing this module has no side effects.
 """
+import json
 import re
 from datetime import date, datetime, timezone
 from html.parser import HTMLParser
@@ -412,6 +413,272 @@ def coverage_meta(rows, generated_at):
         "excluded_count"   : sum(1 for row in rows if row.get("is_suspect")),
         "latest_match_date": latest,
     }
+
+
+# ── The league ledger ─────────────────────────────────────────────────────────
+#
+# Coverage used to be a dict in the pipeline. A dict can say which leagues to
+# fetch and nothing else, so a league considered and rejected read exactly like
+# one nobody had ever heard of — which is why the Esports World Cup's absence
+# was invisible for two months (ADR-0001).
+#
+# `data/leagues.json` replaces it with a verdict per league. Every league
+# OpenDota knows about carries one, so "not covered" is a decision on record
+# rather than a gap in a literal, and reversing a decision is editing one word.
+#
+# The functions below read and update that document. Reading and writing the
+# file is the pipeline shell's job.
+
+LEDGER_ACTIVE   = "active"
+LEDGER_REJECTED = "rejected"
+LEDGER_PENDING  = "pending"
+
+LEDGER_VERDICTS = (LEDGER_ACTIVE, LEDGER_REJECTED, LEDGER_PENDING)
+
+# The name a league is logged and recorded under when the ledger gives none.
+UNKNOWN_LEAGUE = "Unknown League"
+
+
+def ledger_entries(ledger):
+    """
+    Every league record in the ledger, in file order.
+
+    A ledger that is missing, empty or the wrong shape reads as no leagues
+    rather than raising. It is a hand-edited file: it can arrive broken, and
+    every caller here would rather report that than fail mid-run.
+    """
+    if not isinstance(ledger, dict):
+        return []
+
+    entries = ledger.get("leagues")
+    if not isinstance(entries, list):
+        return []
+
+    return [entry for entry in entries if isinstance(entry, dict)]
+
+
+def active_leagues(ledger):
+    """
+    The leagues to fetch, as `{league_id: name}` in ledger order.
+
+    The name is the ledger's, not OpenDota's. It is written onto every match row
+    as `league_name` and grouped on by the dashboard, so a league OpenDota
+    renames — or spells "SLAM IV" where the dataset has said "Slam IV" for 96
+    matches — must not fracture a season's rows into two tournaments.
+
+    A record with no id is skipped; one with no name is fetched under a
+    placeholder. Losing the label costs a readable log line, and losing the
+    league would be exactly the silent exclusion the ledger exists to end.
+    """
+    fetched = {}
+
+    for entry in ledger_entries(ledger):
+        league_id = entry.get("league_id")
+
+        if league_id is None or entry.get("verdict") != LEDGER_ACTIVE:
+            continue
+
+        # First entry wins, so a duplicated id resolves the same way every run
+        # rather than depending on which copy was appended last.
+        fetched.setdefault(league_id, entry.get("name") or UNKNOWN_LEAGUE)
+
+    return fetched
+
+
+def verdict_counts(ledger):
+    """How many leagues hold each verdict — the run's one-line coverage report."""
+    counts = {}
+
+    for entry in ledger_entries(ledger):
+        verdict = entry.get("verdict")
+        counts[verdict] = counts.get(verdict, 0) + 1
+
+    return counts
+
+
+def ledger_problems(ledger):
+    """
+    Everything wrong with the ledger, described one line at a time.
+
+    The file is reviewed and edited in pull requests, so it can arrive
+    misspelled — and a misspelled verdict fails the way a rejection does: the
+    league is simply not fetched. That is the silent exclusion this whole
+    ledger exists to end, so the run says what it could not read.
+    """
+    problems = []
+    seen     = set()
+
+    for entry in ledger_entries(ledger):
+        league_id = entry.get("league_id")
+        name      = entry.get("name") or UNKNOWN_LEAGUE
+
+        if league_id is None:
+            problems.append(f"entry '{name}' has no league_id and is ignored")
+            continue
+
+        if league_id in seen:
+            problems.append(
+                f"league_id {league_id} ({name}) appears more than once — "
+                f"the first entry decides"
+            )
+        seen.add(league_id)
+
+        verdict = entry.get("verdict")
+        if verdict not in LEDGER_VERDICTS:
+            problems.append(
+                f"league_id {league_id} ({name}) has verdict '{verdict}', "
+                f"which is not one of {'/'.join(LEDGER_VERDICTS)} — it will "
+                f"not be fetched"
+            )
+
+    return problems
+
+
+def _ledger_entry(league_id, name, verdict, tier1_event=None):
+    """One ledger record, with its keys in the order the file reads best."""
+    return {
+        "league_id"  : league_id,
+        "name"       : name,
+        "tier1_event": tier1_event,
+        "verdict"    : verdict,
+    }
+
+
+def _unseen_leagues(api_leagues, seen):
+    """
+    Each league in an OpenDota response whose id is new to `seen`, as
+    `(league_id, name)`. `seen` is updated as it goes.
+
+    Shared by seeding and discovery so that neither can write a second entry
+    for one league: a response that omits an id, or repeats one, is the API's
+    business rather than the ledger's.
+    """
+    for league in api_leagues or []:
+        league_id = league.get("leagueid")
+
+        if league_id is None or league_id in seen:
+            continue
+        seen.add(league_id)
+
+        yield league_id, league.get("name")
+
+
+def seed_ledger(api_leagues, active_names=None, seeded_on=None):
+    """
+    Builds the ledger from OpenDota's full league list.
+
+    Seeding is **by existence**: every league in the response is decided here
+    and now. `active_names` is `{league_id: name}` — keyed by id, because names
+    are never how a league is identified (ADR-0001); the name in it is only the
+    label to record. Those leagues are seeded `active`, everything else
+    `rejected`. Nothing is seeded `pending`, because `pending` has to mean
+    "appeared since the ledger was written", and it cannot mean that if ten
+    thousand leagues are born pending.
+
+    Not by date and not by id range. League ids are not chronological — The
+    International 2013 is 65006, above every 2026 league — so an id cutoff
+    would mark the entire back catalogue as new.
+
+    A league in `active_names` that the response omits is still recorded, so a
+    short API answer cannot quietly drop a tournament the project covers.
+
+    `seeded_on` is passed in rather than read from a clock, because reading the
+    clock is I/O and this function does none.
+    """
+    active_names = active_names or {}
+    entries      = []
+    seen         = set()
+
+    for league_id, api_name in _unseen_leagues(api_leagues, seen):
+        covered = league_id in active_names
+        entries.append(_ledger_entry(
+            league_id,
+            active_names[league_id] if covered else api_name,
+            LEDGER_ACTIVE if covered else LEDGER_REJECTED,
+        ))
+
+    for league_id, name in active_names.items():
+        if league_id not in seen:
+            entries.append(_ledger_entry(league_id, name, LEDGER_ACTIVE))
+
+    # Covered leagues first, so opening the file answers "what does this
+    # project fetch" without a search through ten thousand rejections. Position
+    # carries no meaning — every verdict is read from its own entry — so later
+    # hand edits are free to leave a league where it sits.
+    entries.sort(key=lambda entry: (entry["verdict"] != LEDGER_ACTIVE,
+                                    entry["league_id"]))
+
+    return {
+        "_comment": (
+            "Every league OpenDota knows about, and what this project decided "
+            "about it. Only 'active' leagues are fetched. Editing a verdict "
+            "takes effect on the next pipeline run; nothing else needs "
+            "changing. Leagues appearing after the seed date arrive as "
+            "'pending' and are awaiting a verdict."
+        ),
+        "source"   : "https://api.opendota.com/api/leagues",
+        "seeded_on": seeded_on,
+        "leagues"  : entries,
+    }
+
+
+def merge_discovered_leagues(ledger, api_leagues):
+    """
+    Records leagues OpenDota now lists that the ledger has never seen, as
+    `pending`. Returns `(ledger, discovered)` — a new document, and just the
+    entries it gained.
+
+    Existing records are copied through untouched, verdict and name alike. A
+    rename upstream must not re-case a season of match rows, and it must
+    certainly not reopen a decision already taken.
+
+    An empty response discovers nothing. `fetch_url` answers None on failure
+    and a list on success, but a truncated list is neither, and treating one as
+    news would fill the ledger with duplicates of what it already holds.
+    """
+    entries = [dict(entry) for entry in ledger_entries(ledger)]
+    known   = {entry.get("league_id") for entry in entries}
+
+    discovered = []
+    for league in api_leagues or []:
+        league_id = league.get("leagueid")
+        if league_id is None or league_id in known:
+            continue
+        known.add(league_id)
+
+        discovered.append(_ledger_entry(
+            league_id, league.get("name"), LEDGER_PENDING
+        ))
+
+    merged = dict(ledger) if isinstance(ledger, dict) else {}
+    merged["leagues"] = entries + discovered
+
+    return merged, discovered
+
+
+def format_ledger(ledger):
+    """
+    The ledger as JSON text, one league per line.
+
+    Written by hand rather than by `json.dump(indent=...)`, which would spread
+    every league over five lines and turn a 10,000-entry file into a 50,000-line
+    one. A verdict change should read as a one-line diff in a pull request,
+    because that is where the ledger is reviewed.
+    """
+    document = dict(ledger) if isinstance(ledger, dict) else {}
+    entries  = document.pop("leagues", [])
+
+    lines = []
+    for key, value in document.items():
+        lines.append(f"  {json.dumps(key)}: {json.dumps(value, ensure_ascii=False)},")
+
+    lines.append('  "leagues": [')
+    for position, entry in enumerate(entries):
+        comma = "," if position < len(entries) - 1 else ""
+        lines.append(f"    {json.dumps(entry, ensure_ascii=False)}{comma}")
+    lines.append("  ]")
+
+    return "{\n" + "\n".join(lines) + "\n}\n"
 
 
 # ── Liquipedia Tier 1 calendar ────────────────────────────────────────────────
