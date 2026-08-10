@@ -42,13 +42,19 @@ class TestCoverageMeta:
         assert meta["latest_match_date"] == "2025-11-09"
         assert meta["generated_at"] == "2026-08-09T14:30:05+00:00"
 
-    def test_leaves_the_excluded_count_uncomputed(self):
-        # Null means "not yet computed"; 0 would claim "computed, none found",
-        # and five suspect matches are in the dataset today. Filled in by
-        # tier1-pipeline-automation/05.
-        meta = coverage_meta([row(1, "Slam IV", 1762671704)], RUN_AT)
+    def test_counts_the_rows_excluded_from_the_averages(self):
+        # The field read null while suspect classification did not exist, since
+        # 0 would have claimed "computed, none found". It is a real count now;
+        # what makes a row suspect is covered in test_suspect.py.
+        rows = [
+            row(1, "Slam IV", 1762671704),
+            {**row(2, "Slam IV", 1762671704), "is_suspect": True},
+        ]
 
-        assert meta["excluded_count"] is None
+        meta = coverage_meta(rows, RUN_AT)
+
+        assert meta["match_count"] == 2
+        assert meta["excluded_count"] == 1
 
     def test_handles_an_empty_dataset(self):
         meta = coverage_meta([], RUN_AT)

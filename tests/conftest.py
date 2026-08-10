@@ -49,6 +49,19 @@ def game_mode_1_match():
 
 
 @pytest.fixture
+def suspect_matches():
+    """
+    All five known suspect matches — DreamLeague S29, 8809802771, 8809797141,
+    8809726019, 8822088303 and 8821954344 — in the order the issue lists them.
+
+    Every one omits `objectives` entirely while carrying a full duration and a
+    real hero kill score, which is what makes them indistinguishable from a
+    match where nothing happened. 8821954344 is the 96-minute game.
+    """
+    return load_payload("suspect_objectives")
+
+
+@pytest.fixture
 def patch_map():
     """The subset of the OpenDota patch constants the fixtures need."""
     return {58: "7.39", 59: "7.40", 60: "7.41"}

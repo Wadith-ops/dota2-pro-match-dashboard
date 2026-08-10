@@ -90,7 +90,7 @@ Zero is a time, not an absence. A first blood on the horn reads `first_blood_tim
 
 Only the **rendered tournaments table** is authoritative. The same page carries a Timeline template that deliberately includes Tier 2 events by the listed organisers; reading it is what once classified FISSURE Universe Episode 8 as Tier 1 and 1win Essence II as not. Episodes 4 and 6 of that series *are* Tier 1 — the distinction is per event, not per series.
 
-**Checkpoint** — `checkpoints/fetched_matches.json`, the set of match IDs already fetched. Match-level only: league match-ID lists are always re-fetched so new matches are detected.
+**Checkpoint** — `checkpoints/fetched_matches.json`, the set of match IDs already fetched. Match-level only: league match-ID lists are always re-fetched so new matches are detected. An id missing from it means "fetch this", which is why a suspect match inside its retry window is deliberately left out.
 
 **Raw match** — the full untouched API response, roughly 386 KB per match, of which `players` is 87% and `objectives` — the only part the dashboard reads — is 1.4%. Historically stored in `data/matches.json`; that store is being retired in favour of the Standard record, with the raw sink retained as a **disabled seam** so full-fidelity capture can be switched back on for modelling. Never committed.
 
@@ -98,7 +98,15 @@ Only the **rendered tournaments table** is authoritative. The same page carries 
 
 **Flat CSV** — `data/matches_flat.csv`, the flattened match-row export. This is the only data the deployed dashboard reads.
 
-**Suspect match** — a match whose objective data is missing or implausible: empty `objectives`, zero towers lost by both sides in a match over 20 minutes, or a combined hero kill score of zero. Suspect matches are flagged, **excluded from every average**, and kept visible in match history. Five exist today, including a 96-minute game recorded as zero towers. A zero that means "unknown" corrupts every average it touches. (Lands in `tier1-pipeline-automation/05`.)
+**Suspect match** — a match whose objective data is missing or implausible: empty `objectives`, zero towers lost by both sides in a match over 20 minutes, or a combined hero kill score of zero. A zero that means "unknown" corrupts every average it touches, so suspect matches are flagged on the row as `is_suspect` and `suspect_reason`, **excluded from every figure**, and kept visible in match history with the reason shown. Five exist today, all in DreamLeague Season 29, including a 96-minute game recorded as zero towers.
+
+The exclusion is from *figures*, not from the dataset: the match count, the coverage line and every match history table still hold them, and a head-to-head record still counts them, because who won is right whether or not the replay parsed. See ADR-0007.
+
+**Unparsed replay** — the cause. OpenDota answers a match request as soon as the match ends, sometimes before it has parsed the replay, and an unparsed match arrives with no `objectives` at all. Such a match is held out of the checkpoint so the next run fetches it again, for five days after its start time; after that it is checkpointed, recorded in `checkpoints/unparsed_matches.json`, and left alone. A match that parses in the meantime is re-flattened and loses its flag with no manual step.
+
+**Permanently unparsed** — a suspect match that has run out of retries. The distinction from a merely suspect one is operational, not analytical: both are excluded from figures and shown in match history identically, and the difference is only whether the pipeline will try again. It is recorded in the checkpoint rather than on the row, because it describes the pipeline's state on a given day rather than the match.
+
+**Retry window** — the five days a suspect match stays eligible for re-fetching, measured from the **match's own start time** rather than from when the pipeline first saw it. A backfilled event is therefore past its window on arrival, which is correct: its replays were parsed long ago or never.
 
 **Coverage** — what the dataset currently contains: generation timestamp, match count, tournament count, excluded count, and the date of the most recent match. Written to `data/meta.json` and shown on the dashboard, so a gap is visible at the point of use rather than discovered later.
 
@@ -146,15 +154,17 @@ Tournaments are ordered by **first match date, descending** — latest first —
 
 **Other:** `first_blood_time`, `first_blood_time_mins`, `courier_kills`
 
+**Data quality:** `is_suspect`, `suspect_reason` — the flag, and the reasons behind it joined by `;` (`no_objectives`, `no_towers_lost`, `no_hero_kills`). Blank on an ordinary match, and blank reads back from the CSV as NaN whatever dtype is asked for, so `load_data()` fills it.
+
 ### Added in `load_data()`
 
 `total_roshan`, `total_kills`, `total_barracks`, `total_towers`, `both_lost_barracks`, `both_teams_roshan`
 
-`patch_label` is **not** among them — it comes from the CSV, and `load_data()` passes `core.CSV_DTYPES` to `read_csv` so it arrives as a string.
+`patch_label`, `is_suspect` and `suspect_reason` are **not** among them — they come from the CSV, and `load_data()` passes `core.CSV_DTYPES` to `read_csv` so the string columns arrive as strings.
 
 ### Added in `build_team_perspective()`
 
-`team_won`, `side`, `got_first_roshan`, `team_kills`, `team_barracks_killed`, plus the match-level columns carried through unchanged.
+`team_won`, `side`, `got_first_roshan`, `team_kills`, `team_barracks_killed`, plus the match-level columns carried through unchanged — including `is_suspect`, so a team-level figure can exclude the same matches a match-level one does.
 
 ## Invariants
 
@@ -165,4 +175,4 @@ Tournaments are ordered by **first match date, descending** — latest first —
 - `patch_label` is a non-empty string in every row — `"Unknown"` where the API reported no patch. That is what lets it survive the CSV as a label rather than a number.
 - `first_blood_time_mins < 0` is **valid data** — a pre-horn kill, not an artefact. See ADR-0003.
 - An objective timing of `0` means the event happened on the horn; `null` means no such event was recorded. The two are never conflated.
-- A suspect match is excluded from averages but present in match history. Absence from a chart never means absence from the record. **Not yet implemented** — this is the target state, and lands in `tier1-pipeline-automation/05`. Today the five suspect matches are still in every average, and `meta.json` carries `excluded_count: null` to say so rather than claiming zero.
+- A suspect match is excluded from figures but present in match history. Absence from a chart never means absence from the record, and `meta.json` states the excluded count so the dashboard can say how many. `excluded_count: null` means the figure was never computed — a `meta.json` older than `tier1-pipeline-automation/05` — and reads as "unknown", never as zero.

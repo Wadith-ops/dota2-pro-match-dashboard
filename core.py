@@ -23,8 +23,10 @@ UNKNOWN_PATCH = "Unknown"
 
 # How the CSV must be read back. `patch_label` is written as "7.40" and pandas
 # would otherwise re-infer it as the float 7.4, losing the trailing zero — the
-# thing this column exists to preserve. Passed to `read_csv` by the dashboard.
-CSV_DTYPES = {"patch_label": str}
+# thing this column exists to preserve. `suspect_reason` is blank on most rows,
+# and blank reads back as NaN rather than "" — consumers fill it. Passed to
+# `read_csv` by the dashboard.
+CSV_DTYPES = {"patch_label": str, "suspect_reason": str}
 
 _PATCH_NAME = re.compile(r"^(\d+)\.(\d+)(.*)$")
 
@@ -149,6 +151,117 @@ def flatten_objectives(objectives):
     return result
 
 
+# ── Suspect matches ───────────────────────────────────────────────────────────
+#
+# OpenDota answers a match request as soon as the match ends, whether or not it
+# has parsed the replay yet. An unparsed match arrives with its objectives
+# missing, so every objective column flattens to zero — and a zero that means
+# "unknown" is indistinguishable from a zero that means "nothing happened". One
+# such match is 96 minutes long with 130 hero kills and no towers.
+#
+# These matches are flagged rather than dropped: the averages exclude them, the
+# match history keeps them, and the pipeline re-fetches them for a few days in
+# case the replay is parsed late. See ADR-0007.
+
+SUSPECT_NO_OBJECTIVES = "no_objectives"
+SUSPECT_NO_TOWERS     = "no_towers_lost"
+SUSPECT_NO_KILLS      = "no_hero_kills"
+
+# What a fetched match is: done with, worth fetching again, or given up on.
+FETCH_COMPLETE = "complete"
+FETCH_HELD     = "held"
+FETCH_UNPARSED = "unparsed"
+
+# Below this, a game with no buildings destroyed is an ordinary early forfeit.
+TOWERLESS_MATCH_SECS = 20 * 60
+
+# How long a suspect match stays eligible for re-fetching, measured from the
+# match's own start time. At the six-hourly cadence that is twenty attempts,
+# which is generous — a replay unparsed for five days is not going to parse.
+SUSPECT_RETRY_DAYS = 5
+
+
+def suspect_reasons(match, objective_counts=None):
+    """
+    Names every reason this match's objective data cannot be trusted, as a
+    tuple. An empty tuple is a match whose numbers stand.
+
+    `objective_counts` is the output of `flatten_objectives` when the caller has
+    already computed it; left out, it is computed here. Either way the verdict
+    is the same — it is a parameter to save the second pass, not to change the
+    answer.
+
+    A missing objectives array is reported once. Such a match also has no towers
+    in it, but that zero *is* the missing array, not separate corroboration; the
+    tower rule is there for a match that recorded objectives and still shows no
+    buildings, which is an independent signal.
+    """
+    objectives = match.get("objectives")
+    if not objectives:
+        return (SUSPECT_NO_OBJECTIVES,)
+
+    if objective_counts is None:
+        objective_counts = flatten_objectives(objectives)
+
+    reasons = []
+
+    duration = match.get("duration")
+    towers_lost = (objective_counts.get("radiant_towers_lost", 0)
+                   + objective_counts.get("dire_towers_lost", 0))
+    if duration is not None and duration > TOWERLESS_MATCH_SECS and towers_lost == 0:
+        reasons.append(SUSPECT_NO_TOWERS)
+
+    # An unreported score is not a goalless game; it is a thin payload, which is
+    # the condition being caught.
+    if (match.get("radiant_score") or 0) + (match.get("dire_score") or 0) == 0:
+        reasons.append(SUSPECT_NO_KILLS)
+
+    return tuple(reasons)
+
+
+def retry_window_open(match, now):
+    """
+    Whether a suspect match is still young enough to be worth re-fetching.
+
+    The deadline hangs off the match's own start time rather than off when the
+    pipeline first saw it. A match is fetched within hours of ending, so the two
+    are the same for anything arriving live — and for a backfill they are not:
+    an event imported two months late is past its deadline immediately, which is
+    the right answer, since its replays were either parsed long ago or never.
+
+    Keeping the anchor in the payload is also what lets this stay pure: no
+    ledger of first-seen timestamps has to be carried between runs.
+    """
+    start_time = match.get("start_time")
+    if start_time is None:
+        return False
+
+    return now.timestamp() < start_time + SUSPECT_RETRY_DAYS * 86400
+
+
+def classify_fetch(match, now):
+    """
+    What the pipeline should do with a match it has just fetched.
+
+    - `FETCH_COMPLETE` — the numbers stand; check it off and never fetch again.
+    - `FETCH_HELD` — suspect, but young enough that OpenDota may still parse the
+      replay. It must be left *out* of the completed checkpoint: that absence is
+      the whole re-fetch mechanism, since the next run fetches every id it has
+      no record of having fetched.
+    - `FETCH_UNPARSED` — suspect and out of time. Check it off like any other
+      match; a replay unparsed for five days is not going to be parsed, and
+      re-fetching it every six hours forever spends calls on nothing.
+
+    The clock is a parameter because reading it is I/O. Which of these three
+    answers means "add to the checkpoint" is the shell's business, but *which
+    answer* is not, and this is where it is decided and tested.
+    """
+    if not suspect_reasons(match):
+        return FETCH_COMPLETE
+
+    return FETCH_HELD if retry_window_open(match, now) else FETCH_UNPARSED
+
+
 def flatten_match(match, patch_map):
     """
     Flattens a single raw match dictionary into a flat row for the DataFrame.
@@ -214,7 +327,49 @@ def flatten_match(match, patch_map):
 
     row.update(obj_data)
 
+    # ── Data quality ──────────────────────────────────────────
+    # Last, because the verdict reads the counts above. The counts are passed
+    # in rather than recomputed: this is the same objectives array, read once.
+    reasons = suspect_reasons(match, obj_data)
+    row["is_suspect"]     = bool(reasons)
+    row["suspect_reason"] = ";".join(reasons)
+
     return row
+
+
+def index_by_match_id(matches):
+    """
+    Where each match sits in a list of stored payloads.
+
+    The pipeline appends every match it fetches, and a match held back for
+    re-fetching is fetched more than once. Without this index the second copy
+    would be appended alongside the first and the match would be counted twice
+    in every average — the failure this whole issue exists to prevent, arriving
+    by the back door.
+    """
+    return {
+        match.get("match_id"): position
+        for position, match in enumerate(matches)
+        if match.get("match_id") is not None
+    }
+
+
+def store_match(matches, positions, match):
+    """
+    Stores a fetched match in place, replacing any payload already held for its
+    id, and keeps `positions` in step. Both arguments are updated.
+
+    The replacement is always the better record: the only match fetched twice is
+    one held back as unparsed, and the second fetch is the one with the replay.
+    """
+    match_id = match.get("match_id")
+    position = positions.get(match_id)
+
+    if position is None:
+        positions[match_id] = len(matches)
+        matches.append(match)
+    else:
+        matches[position] = match
 
 
 def build_rows(matches, patch_map):
@@ -232,11 +387,10 @@ def coverage_meta(rows, generated_at):
     latest_match_date is the staleness signal that matters: a run which fetches
     nothing still refreshes generated_at, so only the match date reveals a gap.
 
-    excluded_count is null, not 0, until suspect-match handling lands (see
-    tier1-pipeline-automation/05). Null means "not yet computed"; 0 would mean
-    "computed, none found" — and five suspect matches are in the dataset today,
-    so writing 0 would state something false. The field is present from the
-    start so the dashboard does not need changing when 05 fills it in.
+    excluded_count is how many rows are suspect — flagged, kept in the dataset,
+    and left out of every average. It is a real count now that classification
+    exists; it read null while the answer was "not yet computed", because 0
+    would have claimed "computed, none found" with five in the dataset.
 
     `generated_at` is a datetime the caller supplies, because reading the clock
     is I/O and this function does none.
@@ -255,7 +409,7 @@ def coverage_meta(rows, generated_at):
         "match_count"      : len(rows),
         "tournament_count" : len({row.get("league_name") for row in rows
                                   if row.get("league_name") is not None}),
-        "excluded_count"   : None,
+        "excluded_count"   : sum(1 for row in rows if row.get("is_suspect")),
         "latest_match_date": latest,
     }
 

@@ -15,11 +15,23 @@ import requests
 import time
 import json
 import os
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 import pandas as pd
 
-from core import build_rows, coverage_meta
+from core import (
+    FETCH_COMPLETE,
+    FETCH_HELD,
+    FETCH_UNPARSED,
+    SUSPECT_RETRY_DAYS,
+    build_rows,
+    classify_fetch,
+    coverage_meta,
+    index_by_match_id,
+    store_match,
+    suspect_reasons,
+)
 
 # %%
 # # Step 1 - Configuration and Setup
@@ -53,6 +65,8 @@ CHECKPOINT_DIR = str(_HERE / "checkpoints")
 
 MATCHES_FILE = os.path.join(DATA_DIR, "matches.json")
 MATCH_CHECKPOINT = os.path.join(CHECKPOINT_DIR, "fetched_matches.json")
+# Matches given up on: suspect, out of retries, and never to be fetched again.
+UNPARSED_CHECKPOINT = os.path.join(CHECKPOINT_DIR, "unparsed_matches.json")
 CSV_FILE = os.path.join(DATA_DIR, "matches_flat.csv")
 META_FILE = os.path.join(DATA_DIR, "meta.json")
 
@@ -61,12 +75,19 @@ BASE_URL = "https://api.opendota.com/api"
 DELAY_SECONDS = 1.0
 
 # Extracted Fields
-# Fields to always extract
+# Fields to always extract. Every field the flat row is built from has to be
+# here: with SAVE_RAW off, this list *is* the payload, and a field missing from
+# it reads downstream as missing from the API. Dropping the scores that way
+# would make every trimmed match look like a zero-kill game and flag the lot
+# as suspect.
 CORE_FIELDS = [
     "match_id",
     "duration",
     "patch",
     "radiant_win",
+    "radiant_score",
+    "dire_score",
+    "game_mode",
     "start_time",
     "radiant_team",
     "dire_team",
@@ -200,6 +221,37 @@ def save_matches(matches):
         json.dump(matches, f, indent=2)
 
 
+def checkpoint_or_hold(match_data, fetched_matches, unparsed_matches, now):
+    """
+    Acts on `core.classify_fetch`: checkpoints the match, or deliberately does
+    not, and says which so the run can tally it.
+
+    Held matches are the ones **left out** of `fetched_matches`. Nothing else
+    schedules the re-fetch — the next run fetches every id it has no record of
+    having fetched, so the missing entry is the mechanism.
+    """
+    match_id = match_data["match_id"]
+    verdict  = classify_fetch(match_data, now)
+
+    if verdict == FETCH_HELD:
+        print(f"  Match {match_id} looks unparsed "
+              f"({';'.join(suspect_reasons(match_data))}) — holding back for re-fetch")
+        return verdict
+
+    fetched_matches.add(match_id)
+
+    if verdict == FETCH_UNPARSED:
+        # A durable record of what was given up on, so "still zeroed months
+        # later" can be told apart from "flagged this morning, may yet fix
+        # itself" without re-deriving it from timestamps.
+        unparsed_matches.add(match_id)
+        print(f"  Match {match_id} still unparsed "
+              f"({';'.join(suspect_reasons(match_data))}) after "
+              f"{SUSPECT_RETRY_DAYS} days — giving up")
+
+    return verdict
+
+
 def run_pipeline():
     """
     Main pipeline function. Loops over ACTIVE_LEAGUES, fetches match IDs,
@@ -210,11 +262,20 @@ def run_pipeline():
     print("=" * 60)
 
     # Load checkpoints and existing data
-    fetched_matches = load_checkpoint(MATCH_CHECKPOINT)
-    all_matches     = load_existing_matches()
+    fetched_matches   = load_checkpoint(MATCH_CHECKPOINT)
+    unparsed_matches  = load_checkpoint(UNPARSED_CHECKPOINT)
+    all_matches       = load_existing_matches()
+    positions         = index_by_match_id(all_matches)
+
+    # One clock for the run. Retry windows are five days wide, so nothing turns
+    # on where inside a run's few minutes a given match is classified.
+    now = datetime.now(timezone.utc)
+
+    tally = Counter()
 
     print(f"Matches already fetched : {len(fetched_matches)}")
     print(f"Matches in file         : {len(all_matches)}")
+    print(f"Given up as unparsed    : {len(unparsed_matches)}")
     print()
 
     # Loop over active leagues
@@ -237,9 +298,12 @@ def run_pipeline():
             continue
 
         match_ids = [match["match_id"] for match in data]
-        new_ids   = [mid for mid in match_ids if mid not in fetched_matches]
 
-        print(f"  Found {len(match_ids)} total, {len(new_ids)} new matches")
+        # Anything not in the checkpoint: matches never seen, and matches held
+        # back by an earlier run because their replay was not parsed yet.
+        new_ids = [mid for mid in match_ids if mid not in fetched_matches]
+
+        print(f"  Found {len(match_ids)} total, {len(new_ids)} to fetch")
 
         if not new_ids:
             print(f"  Nothing new to fetch")
@@ -258,27 +322,35 @@ def run_pipeline():
             # Add league name for easy reference
             match_data["league_name"] = league_name
 
-            # Append to in-memory list
-            all_matches.append(match_data)
+            # Store it, replacing the record of an earlier, unparsed fetch
+            store_match(all_matches, positions, match_data)
 
-            # Update match checkpoint
-            fetched_matches.add(match_id)
+            # Update match checkpoint — unless the match is being held back
+            tally[checkpoint_or_hold(
+                match_data, fetched_matches, unparsed_matches, now
+            )] += 1
             new_match_count += 1
 
             # Save every 10 matches
             if new_match_count % 10 == 0:
                 save_matches(all_matches)
                 save_checkpoint(MATCH_CHECKPOINT, fetched_matches)
+                save_checkpoint(UNPARSED_CHECKPOINT, unparsed_matches)
                 print(f"  Checkpoint saved — {new_match_count} new matches so far")
 
         # Save after each league completes
         save_matches(all_matches)
         save_checkpoint(MATCH_CHECKPOINT, fetched_matches)
+        save_checkpoint(UNPARSED_CHECKPOINT, unparsed_matches)
         print(f"  Done — {new_match_count} new matches fetched for {league_name}")
         print()
 
     print("=" * 60)
     print(f"Pipeline complete. Total matches in file: {len(all_matches)}")
+    print(f"  Complete            : {tally[FETCH_COMPLETE]}")
+    print(f"  Held for re-fetch   : {tally[FETCH_HELD]}")
+    print(f"  Permanently unparsed: {tally[FETCH_UNPARSED]} "
+          f"(all time: {len(unparsed_matches)})")
     print("=" * 60)
 
 # %%

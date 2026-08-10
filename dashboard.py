@@ -22,6 +22,9 @@ def load_data():
     # stops pandas turning "7.40" back into 7.4 on the way in.
     df = pd.read_csv(DATA_PATH, dtype=CSV_DTYPES)
     df["start_time"] = pd.to_datetime(df["start_time"])
+    # Blank reads back as NaN whatever dtype is asked for, and a bare `nan` in
+    # a match history table reads as a fault rather than as "nothing to say".
+    df["suspect_reason"] = df["suspect_reason"].fillna("")
     df["total_roshan"] = df["radiant_roshan_kills"] + df["dire_roshan_kills"]
     df["total_kills"] = df["radiant_score"] + df["dire_score"]
     df["total_barracks"] = df["radiant_barracks_lost"] + df["dire_barracks_lost"]
@@ -42,6 +45,52 @@ def load_meta() -> dict:
     except (OSError, ValueError):
         return {}
     return meta if isinstance(meta, dict) else {}
+
+
+def measured(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    The rows a figure may be computed from: everything except suspect matches.
+
+    A suspect match is one whose objectives OpenDota never recorded, so its
+    zeroes mean "unknown" and cannot be told apart from "nothing happened". One
+    is a 96-minute game holding zero towers and zero Roshans. Averaging those
+    zeroes in drags every objective metric down by a real amount.
+
+    They are excluded from the figures, not from the dataset — every match
+    history table still lists them, flagged. See ADR-0007.
+    """
+    return df[~df["is_suspect"]]
+
+
+def note_exclusions(df: pd.DataFrame) -> None:
+    """
+    States how much of a selection the figures under it leave out.
+
+    Silent when the count is zero, and never silent when it is not: an
+    exclusion the reader cannot see is the thing this whole feature exists to
+    stop.
+    """
+    count = int(df["is_suspect"].sum())
+    if count == 0:
+        return
+
+    st.caption(
+        f":orange[{count} of {len(df):,} matches excluded from the figures below "
+        "— objective data missing. They remain in match history.]"
+    )
+
+
+def suspect_label(reason: str) -> str:
+    """
+    The match-history mark for a flagged row, blank for an ordinary match.
+
+    The stored reason is machine-shaped — `no_towers_lost;no_hero_kills` — and
+    this is the only place it is read by a person.
+    """
+    if not reason:
+        return ""
+
+    return "⚠ " + ", ".join(part.replace("_", " ") for part in reason.split(";"))
 
 
 def by_patch(df: pd.DataFrame) -> pd.DataFrame:
@@ -95,11 +144,11 @@ def coverage_line(df: pd.DataFrame, meta: dict) -> str:
     parts.append(f"**{len(df):,}** matches")
     parts.append(f"**{df['league_name'].nunique()}** tournaments")
 
-    # Rendered only once the count is real. Suspect-match exclusion is not
-    # implemented yet (tier1-pipeline-automation/05), so meta carries null and
-    # the clause stays off — claiming "0 excluded" while five suspect matches
-    # skew every average would be a false assurance, which is worse than silence
-    # for someone reading this to price a bet.
+    # Rendered only once the count is real. It read null before suspect matches
+    # were classified, and the clause stayed off rather than claim "0 excluded"
+    # while five of them skewed every average — a false assurance is worse than
+    # silence for someone reading this to price a bet. A pipeline old enough to
+    # predate the count still writes null, and the clause still stays off.
     excluded = meta.get("excluded_count")
     if isinstance(excluded, int) and not isinstance(excluded, bool) and excluded >= 0:
         parts.append(f"**{excluded}** excluded for missing data")
@@ -107,10 +156,113 @@ def coverage_line(df: pd.DataFrame, meta: dict) -> str:
     return " · ".join(parts)
 
 
+def match_history(selection: pd.DataFrame) -> None:
+    """
+    Every match in the selection, newest first — including the ones no figure
+    on the page is computed from, marked in the `Data` column.
+
+    Takes the whole selection rather than the measured rows on purpose. A match
+    that was played belongs in the record of what was played, whatever OpenDota
+    managed to record about it; the figures above are where the exclusion goes.
+    """
+    history = selection[[
+        "start_time", "league_name", "patch_label",
+        "radiant_team_name", "dire_team_name", "winner",
+        "duration_mins", "total_roshan", "total_kills", "total_barracks",
+        "total_towers", "both_lost_barracks", "both_teams_roshan",
+        "suspect_reason",
+    ]].copy().sort_values("start_time", ascending=False)
+
+    history["start_time"] = history["start_time"].dt.strftime("%Y-%m-%d")
+    history["duration_mins"] = history["duration_mins"].round(1)
+    history["both_lost_barracks"] = history["both_lost_barracks"].map({True: "Yes", False: "No"})
+    history["both_teams_roshan"] = history["both_teams_roshan"].map({True: "Yes", False: "No"})
+    history["suspect_reason"] = history["suspect_reason"].map(suspect_label)
+
+    st.dataframe(
+        history.rename(columns={
+            "start_time": "Date", "league_name": "Tournament", "patch_label": "Patch",
+            "radiant_team_name": "Radiant", "dire_team_name": "Dire", "winner": "Winner",
+            "duration_mins": "Duration (min)", "total_roshan": "Roshans",
+            "total_kills": "Kills", "total_barracks": "Barracks", "total_towers": "Towers",
+            "both_lost_barracks": "Both Lost Racks", "both_teams_roshan": "Both Slew Rosh",
+            "suspect_reason": "Data",
+        }),
+        use_container_width=True, hide_index=True,
+    )
+
+
+# Everything the calculator prices, and how each reads.
+OVER_UNDER_METRICS = [
+    ("Kills",          "total_kills",    "%.1f"),
+    ("Roshans",        "total_roshan",   "%.2f"),
+    ("Barracks",       "total_barracks", "%.2f"),
+    ("Towers",         "total_towers",   "%.2f"),
+    ("Duration (min)", "duration_mins",  "%.1f"),
+]
+
+
+def over_under(selection: pd.DataFrame, avg_label: str, key_prefix: str) -> None:
+    """
+    The probability panel: two objective conditions, then a line per metric and
+    the share of games that finished above it.
+
+    Takes the whole selection and measures it here, so no caller can price a
+    line off a match whose objectives were never recorded — every figure in this
+    panel is a share of games meeting an objective condition, and such a match
+    silently answers "no" to all of them.
+    """
+    priced = measured(selection)
+
+    if len(priced) == 0:
+        st.info(
+            "No matches with complete objective data in this selection, so there "
+            "is nothing to price."
+        )
+        return
+
+    caption = f"Based on {len(priced)} match{'es' if len(priced) != 1 else ''}"
+    if len(priced) != len(selection):
+        caption += (f" — {len(selection) - len(priced)} of {len(selection)} left out "
+                    "for missing objective data")
+    st.caption(f"{caption}. Enter a line to see the probability it goes over.")
+
+    n_both_racks = int(priced["both_lost_barracks"].sum())
+    n_both_rosh  = int(priced["both_teams_roshan"].sum())
+    prob_col1, prob_col2 = st.columns(2)
+    prob_col1.metric("Both Teams Lost Barracks",
+                     f"{n_both_racks / len(priced) * 100:.1f}%",
+                     f"{n_both_racks}/{len(priced)} games")
+    prob_col2.metric("Both Teams Slew Roshan",
+                     f"{n_both_rosh / len(priced) * 100:.1f}%",
+                     f"{n_both_rosh}/{len(priced)} games")
+    st.divider()
+
+    header_cols = st.columns(len(OVER_UNDER_METRICS))
+    for col, (label, col_key, fmt) in zip(header_cols, OVER_UNDER_METRICS):
+        col.markdown(f"**{label}**")
+        col.caption(f"{avg_label}: {fmt % priced[col_key].mean()}")
+
+    input_cols = st.columns(len(OVER_UNDER_METRICS))
+    for col, (label, col_key, fmt) in zip(input_cols, OVER_UNDER_METRICS):
+        line = col.number_input(
+            "Line", min_value=0.0, value=None,
+            placeholder="e.g. 39.5", step=0.5,
+            key=f"{key_prefix}_{col_key}", label_visibility="collapsed",
+        )
+        if line is not None:
+            n_over  = int((priced[col_key] > line).sum())
+            n_under = int((priced[col_key] <= line).sum())
+            col.metric("Over",  f"{n_over / len(priced) * 100:.1f}%",
+                       f"{n_over}/{len(priced)} games")
+            col.metric("Under", f"{n_under / len(priced) * 100:.1f}%",
+                       f"{n_under}/{len(priced)} games")
+
+
 @st.cache_data
 def build_team_perspective(df: pd.DataFrame) -> pd.DataFrame:
     base_cols = [
-        "match_id", "league_name", "patch_label", "start_time",
+        "match_id", "league_name", "patch_label", "start_time", "is_suspect",
         "duration_mins", "radiant_win", "first_roshan_team", "first_roshan_time_mins",
         "total_roshan", "total_kills", "total_barracks", "total_towers", "both_lost_barracks", "both_teams_roshan",
     ]
@@ -184,7 +336,15 @@ if selected_teams:
 if selected_patches:
     team_filtered = team_filtered[team_filtered["patch_label"].isin(selected_patches)]
 
+# Every figure on the page is computed from these two frames; `filtered` and
+# `team_filtered` survive only for the match history tables, which list what was
+# played whether or not its objectives were recorded.
+measured_matches      = measured(filtered)
+measured_teams = measured(team_filtered)
+
 st.sidebar.metric("Matches selected", len(filtered))
+if len(filtered) != len(measured_matches):
+    st.sidebar.caption(f"{len(filtered) - len(measured_matches)} excluded from figures")
 
 # ── Page ──────────────────────────────────────────────────────────────────────
 st.title("Dota 2 Pro Match Analysis")
@@ -198,6 +358,16 @@ if len(filtered) == 0:
     st.warning("No matches match the current filters. Try broadening your selection.")
     st.stop()
 
+if len(measured_matches) == 0:
+    # Reachable only by filtering down to suspect matches alone. Saying so beats
+    # a page of NaNs, and beats quietly averaging zeroes that mean "unknown".
+    st.warning(
+        f"All {len(filtered)} matches in this selection are missing their objective "
+        "data, so there are no figures to show. Broaden the selection to see them "
+        "alongside complete matches."
+    )
+    st.stop()
+
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["Team", "Tournament", "Meta Trends", "Head to Head", "Drilldown"])
 
 
@@ -205,9 +375,11 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs(["Team", "Tournament", "Meta Trends", "He
 # TAB 1 — TEAM
 # ══════════════════════════════════════════════════════════════════════════════
 with tab1:
-    if len(team_filtered) == 0:
+    if len(measured_teams) == 0:
         st.info("No team data for the current selection.")
         st.stop()
+
+    note_exclusions(filtered)
 
     if len(selected_teams) == 1:
         st.subheader(selected_teams[0])
@@ -217,16 +389,16 @@ with tab1:
         st.subheader("All Teams")
 
     # ── KPIs ─────────────────────────────────────────────────────────────────
-    avg_team_rosh     = team_filtered["team_roshan_kills"].mean()
-    pct_2plus_rosh    = (team_filtered["team_roshan_kills"] >= 2).mean() * 100
-    avg_total_rosh    = team_filtered["total_roshan"].mean()
-    pct_3plus_rosh    = (team_filtered["total_roshan"] >= 3).mean() * 100
-    avg_team_kills    = team_filtered["team_kills"].mean()
-    avg_total_kills   = team_filtered["total_kills"].mean()
-    avg_team_barr     = team_filtered["team_barracks_killed"].mean()
-    avg_total_barr    = team_filtered["total_barracks"].mean()
-    pct_both_barr     = team_filtered["both_lost_barracks"].mean() * 100
-    avg_duration      = filtered["duration_mins"].mean()
+    avg_team_rosh     = measured_teams["team_roshan_kills"].mean()
+    pct_2plus_rosh    = (measured_teams["team_roshan_kills"] >= 2).mean() * 100
+    avg_total_rosh    = measured_teams["total_roshan"].mean()
+    pct_3plus_rosh    = (measured_teams["total_roshan"] >= 3).mean() * 100
+    avg_team_kills    = measured_teams["team_kills"].mean()
+    avg_total_kills   = measured_teams["total_kills"].mean()
+    avg_team_barr     = measured_teams["team_barracks_killed"].mean()
+    avg_total_barr    = measured_teams["total_barracks"].mean()
+    pct_both_barr     = measured_teams["both_lost_barracks"].mean() * 100
+    avg_duration      = measured_matches["duration_mins"].mean()
 
     c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("Avg Team Roshans/Game", f"{avg_team_rosh:.2f}")
@@ -245,7 +417,7 @@ with tab1:
     st.subheader("Team Breakdown")
 
     team_table = (
-        team_filtered.groupby("team_name")
+        measured_teams.groupby("team_name")
         .agg(
             matches=("match_id", "nunique"),
             wins=("team_won", "sum"),
@@ -304,7 +476,7 @@ with tab1:
     col_rp, col_rt = st.columns(2)
 
     rosh_patch = (
-        team_filtered.groupby("patch_label")
+        measured_teams.groupby("patch_label")
         .agg(avg_team=("team_roshan_kills", "mean"), avg_total=("total_roshan", "mean"))
         .reset_index().pipe(by_patch)
     )
@@ -317,7 +489,7 @@ with tab1:
     col_rp.plotly_chart(fig_rp, use_container_width=True)
 
     rosh_tourn = (
-        team_filtered.groupby("league_name")
+        measured_teams.groupby("league_name")
         .agg(avg_team=("team_roshan_kills", "mean"), avg_total=("total_roshan", "mean"))
         .reset_index().sort_values("avg_total", ascending=True)
     )
@@ -337,7 +509,7 @@ with tab1:
     col_kp, col_kt = st.columns(2)
 
     kills_patch = (
-        team_filtered.groupby("patch_label")
+        measured_teams.groupby("patch_label")
         .agg(avg_team=("team_kills", "mean"), avg_total=("total_kills", "mean"))
         .reset_index().pipe(by_patch)
     )
@@ -350,7 +522,7 @@ with tab1:
     col_kp.plotly_chart(fig_kp, use_container_width=True)
 
     kills_tourn = (
-        team_filtered.groupby("league_name")
+        measured_teams.groupby("league_name")
         .agg(avg_team=("team_kills", "mean"), avg_total=("total_kills", "mean"))
         .reset_index().sort_values("avg_total", ascending=True)
     )
@@ -370,7 +542,7 @@ with tab1:
     col_bp, col_bt = st.columns(2)
 
     barr_patch = (
-        team_filtered.groupby("patch_label")
+        measured_teams.groupby("patch_label")
         .agg(
             avg_team=("team_barracks_killed", "mean"),
             avg_total=("total_barracks", "mean"),
@@ -402,7 +574,7 @@ with tab1:
     col_bp.plotly_chart(fig_bp2, use_container_width=True)
 
     barr_tourn = (
-        team_filtered.groupby("league_name")
+        measured_teams.groupby("league_name")
         .agg(
             avg_team=("team_barracks_killed", "mean"),
             avg_total=("total_barracks", "mean"),
@@ -442,8 +614,8 @@ with tab1:
     st.subheader("Game Length")
     col_gl1, col_gl2 = st.columns(2)
 
-    mean_dur = filtered["duration_mins"].mean()
-    fig_gl = px.histogram(filtered, x="duration_mins", nbins=25,
+    mean_dur = measured_matches["duration_mins"].mean()
+    fig_gl = px.histogram(measured_matches, x="duration_mins", nbins=25,
                           title="Distribution of Game Lengths",
                           labels={"duration_mins": "Duration (min)", "count": "Games"},
                           color_discrete_sequence=["#9B59B6"])
@@ -452,11 +624,11 @@ with tab1:
     fig_gl.update_layout(showlegend=False)
     col_gl1.plotly_chart(fig_gl, use_container_width=True)
 
-    fig_gl_box = px.box(filtered, x="patch_label", y="duration_mins",
+    fig_gl_box = px.box(measured_matches, x="patch_label", y="duration_mins",
                         title="Game Length by Patch",
                         labels={"patch_label": "Patch", "duration_mins": "Duration (min)"},
                         color="patch_label",
-                        category_orders={"patch_label": patch_order(filtered)},
+                        category_orders={"patch_label": patch_order(measured_matches)},
                         color_discrete_sequence=px.colors.qualitative.Set2)
     fig_gl_box.update_layout(showlegend=False)
     col_gl2.plotly_chart(fig_gl_box, use_container_width=True)
@@ -468,8 +640,10 @@ with tab1:
 with tab2:
     st.subheader("Tournament Overview")
 
+    note_exclusions(filtered)
+
     tourn_stats = (
-        filtered.groupby("league_name")
+        measured_matches.groupby("league_name")
         .agg(
             matches=("match_id", "nunique"),
             first_match=("start_time", "min"),
@@ -557,8 +731,10 @@ with tab2:
 with tab3:
     st.subheader("Meta Trends by Patch")
 
+    note_exclusions(filtered)
+
     patch_stats = (
-        filtered.groupby("patch_label")
+        measured_matches.groupby("patch_label")
         .agg(
             matches=("match_id", "nunique"),
             avg_roshan=("total_roshan", "mean"),
@@ -617,12 +793,12 @@ with tab3:
     fig_m3.update_layout(showlegend=False)
     col3.plotly_chart(fig_m3, use_container_width=True)
 
-    fig_m4 = px.violin(filtered, x="patch_label", y="duration_mins",
+    fig_m4 = px.violin(measured_matches, x="patch_label", y="duration_mins",
                        box=True, points=False,
                        title="Game Length Distribution by Patch",
                        labels={"patch_label": "Patch", "duration_mins": "Duration (min)"},
                        color="patch_label",
-                       category_orders={"patch_label": patch_order(filtered)},
+                       category_orders={"patch_label": patch_order(measured_matches)},
                        color_discrete_sequence=px.colors.qualitative.Set2)
     fig_m4.update_layout(showlegend=False)
     col4.plotly_chart(fig_m4, use_container_width=True)
@@ -662,6 +838,11 @@ with tab4:
             )
             h2h["team_a_won"] = h2h["winner"] == team_a
 
+            # The record counts every match. Who won is recorded on the match
+            # itself and is right even when the objectives are missing, so
+            # dropping a played game from a head-to-head record would state
+            # something false about a series the user can see listed below.
+            # The figures under it are a different question — see `measured`.
             team_a_wins = int(h2h["team_a_won"].sum())
             team_b_wins = len(h2h) - team_a_wins
             p_team_a = team_a_wins / len(h2h) * 100
@@ -678,8 +859,11 @@ with tab4:
 
             st.divider()
 
-            # ── Per-team comparative stats ────────────────────────────────
-            h2h_team = build_team_perspective(h2h)
+            h2h_stats = measured(h2h)
+            note_exclusions(h2h)
+
+            # ── Per-team comparative measured_matches ────────────────────────────────
+            h2h_team = build_team_perspective(h2h_stats)
             h2h_team = h2h_team[h2h_team["team_name"].isin([team_a, team_b])]
 
             comp = (
@@ -697,10 +881,10 @@ with tab4:
             comp = comp.sort_values("team_name")
             bar_colors = ["#4C9BE8", "#E88C4C", "#AAAAAA"]
 
-            avg_total_roshans = h2h["total_roshan"].mean()
-            avg_total_kills = h2h["total_kills"].mean()
-            avg_total_barracks = h2h["total_barracks"].mean()
-            avg_total_towers = h2h["total_towers"].mean()
+            avg_total_roshans = h2h_stats["total_roshan"].mean()
+            avg_total_kills = h2h_stats["total_kills"].mean()
+            avg_total_barracks = h2h_stats["total_barracks"].mean()
+            avg_total_towers = h2h_stats["total_towers"].mean()
 
             x_labels = list(comp["team_name"]) + ["Match Total"]
 
@@ -756,68 +940,13 @@ with tab4:
 
             # ── Match history table ───────────────────────────────────────
             st.subheader("Match History")
-            h2h_display = h2h[[
-                "start_time", "league_name", "patch_label",
-                "radiant_team_name", "dire_team_name", "winner",
-                "duration_mins", "total_roshan", "total_kills", "total_barracks", "total_towers",
-                "both_lost_barracks", "both_teams_roshan",
-            ]].copy().sort_values("start_time", ascending=False)
-            h2h_display["start_time"] = h2h_display["start_time"].dt.strftime("%Y-%m-%d")
-            h2h_display["duration_mins"] = h2h_display["duration_mins"].round(1)
-            h2h_display["both_lost_barracks"] = h2h_display["both_lost_barracks"].map({True: "Yes", False: "No"})
-            h2h_display["both_teams_roshan"] = h2h_display["both_teams_roshan"].map({True: "Yes", False: "No"})
-            h2h_display = h2h_display.rename(columns={
-                "start_time": "Date", "league_name": "Tournament", "patch_label": "Patch",
-                "radiant_team_name": "Radiant", "dire_team_name": "Dire", "winner": "Winner",
-                "duration_mins": "Duration (min)", "total_roshan": "Roshans",
-                "total_kills": "Kills", "total_barracks": "Barracks", "total_towers": "Towers",
-                "both_lost_barracks": "Both Lost Racks", "both_teams_roshan": "Both Slew Rosh",
-            })
-            st.dataframe(h2h_display, use_container_width=True, hide_index=True)
+            match_history(h2h)
 
             st.divider()
 
             # ── Over/Under probability calculator ────────────────────────
             st.subheader("Over/Under Calculator")
-            st.caption(f"Based on {len(h2h)} head-to-head match{'es' if len(h2h) != 1 else ''}. Enter a line to see the probability it goes over.")
-
-            n_both_racks = int(h2h["both_lost_barracks"].sum())
-            p_both_racks = n_both_racks / len(h2h) * 100
-            n_both_rosh = int(h2h["both_teams_roshan"].sum())
-            p_both_rosh = n_both_rosh / len(h2h) * 100
-            prob_col1, prob_col2 = st.columns(2)
-            prob_col1.metric("Both Teams Lost Barracks", f"{p_both_racks:.1f}%", f"{n_both_racks}/{len(h2h)} games")
-            prob_col2.metric("Both Teams Slew Roshan", f"{p_both_rosh:.1f}%", f"{n_both_rosh}/{len(h2h)} games")
-            st.divider()
-
-            metrics = [
-                ("Kills",          "total_kills",    "%.1f"),
-                ("Roshans",        "total_roshan",   "%.2f"),
-                ("Barracks",       "total_barracks", "%.2f"),
-                ("Towers",         "total_towers",   "%.2f"),
-                ("Duration (min)", "duration_mins",  "%.1f"),
-            ]
-
-            inp_cols = st.columns(len(metrics))
-            for col, (label, col_key, fmt) in zip(inp_cols, metrics):
-                avg_val = h2h[col_key].mean()
-                col.markdown(f"**{label}**")
-                col.caption(f"H2H avg: {fmt % avg_val}")
-
-            inp_cols2 = st.columns(len(metrics))
-            for col, (label, col_key, fmt) in zip(inp_cols2, metrics):
-                line = col.number_input(
-                    f"Line", min_value=0.0, value=None,
-                    placeholder="e.g. 39.5", step=0.5,
-                    key=f"ou_{col_key}", label_visibility="collapsed",
-                )
-                if line is not None:
-                    n_over  = (h2h[col_key] > line).sum()
-                    n_under = (h2h[col_key] <= line).sum()
-                    p_over  = n_over / len(h2h) * 100
-                    p_under = n_under / len(h2h) * 100
-                    col.metric("Over",  f"{p_over:.1f}%",  f"{int(n_over)}/{len(h2h)} games")
-                    col.metric("Under", f"{p_under:.1f}%", f"{int(n_under)}/{len(h2h)} games")
+            over_under(h2h, "H2H avg", "ou")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -876,14 +1005,20 @@ with tab5:
 
             st.divider()
 
-            # ── Avg stats bar charts ──────────────────────────────────────
-            avg_total_rosh   = dd["total_roshan"].mean()
-            avg_total_kills  = dd["total_kills"].mean()
-            avg_total_barr   = dd["total_barracks"].mean()
-            avg_total_towers = dd["total_towers"].mean()
+            # ── Avg measured_matches bar charts ──────────────────────────────────────
+            # The record above counts every match played; the averages below
+            # cannot, since a match with no recorded objectives contributes
+            # zeroes that mean "unknown".
+            dd_stats = measured(dd)
+            note_exclusions(dd)
+
+            avg_total_rosh   = dd_stats["total_roshan"].mean()
+            avg_total_kills  = dd_stats["total_kills"].mean()
+            avg_total_barr   = dd_stats["total_barracks"].mean()
+            avg_total_towers = dd_stats["total_towers"].mean()
 
             if has_team:
-                dd_team_persp = build_team_perspective(dd)
+                dd_team_persp = build_team_perspective(dd_stats)
                 dd_team_persp = dd_team_persp[dd_team_persp["team_name"] == dd_team]
                 avg_team_rosh   = dd_team_persp["team_roshan_kills"].mean()
                 avg_team_kills  = dd_team_persp["team_kills"].mean()
@@ -942,64 +1077,10 @@ with tab5:
 
             # ── Match history table ───────────────────────────────────────
             st.subheader("Match History")
-            dd_display = dd[[
-                "start_time", "league_name", "patch_label",
-                "radiant_team_name", "dire_team_name", "winner",
-                "duration_mins", "total_roshan", "total_kills", "total_barracks", "total_towers",
-                "both_lost_barracks", "both_teams_roshan",
-            ]].copy().sort_values("start_time", ascending=False)
-            dd_display["start_time"] = dd_display["start_time"].dt.strftime("%Y-%m-%d")
-            dd_display["duration_mins"] = dd_display["duration_mins"].round(1)
-            dd_display["both_lost_barracks"] = dd_display["both_lost_barracks"].map({True: "Yes", False: "No"})
-            dd_display["both_teams_roshan"]  = dd_display["both_teams_roshan"].map({True: "Yes", False: "No"})
-            dd_display = dd_display.rename(columns={
-                "start_time": "Date", "league_name": "Tournament", "patch_label": "Patch",
-                "radiant_team_name": "Radiant", "dire_team_name": "Dire", "winner": "Winner",
-                "duration_mins": "Duration (min)", "total_roshan": "Roshans",
-                "total_kills": "Kills", "total_barracks": "Barracks", "total_towers": "Towers",
-                "both_lost_barracks": "Both Lost Racks", "both_teams_roshan": "Both Slew Rosh",
-            })
-            st.dataframe(dd_display, use_container_width=True, hide_index=True)
+            match_history(dd)
 
             st.divider()
 
             # ── Over/Under probability calculator ─────────────────────────
             st.subheader("Over/Under Calculator")
-            st.caption(f"Based on {len(dd)} match{'es' if len(dd) != 1 else ''}. Enter a line to see the probability it goes over.")
-
-            n_both_racks = int(dd["both_lost_barracks"].sum())
-            n_both_rosh  = int(dd["both_teams_roshan"].sum())
-            p_both_racks = n_both_racks / len(dd) * 100
-            p_both_rosh  = n_both_rosh  / len(dd) * 100
-            prob_col1, prob_col2 = st.columns(2)
-            prob_col1.metric("Both Teams Lost Barracks", f"{p_both_racks:.1f}%", f"{n_both_racks}/{len(dd)} games")
-            prob_col2.metric("Both Teams Slew Roshan",   f"{p_both_rosh:.1f}%",  f"{n_both_rosh}/{len(dd)} games")
-            st.divider()
-
-            dd_metrics = [
-                ("Kills",          "total_kills",    "%.1f"),
-                ("Roshans",        "total_roshan",   "%.2f"),
-                ("Barracks",       "total_barracks", "%.2f"),
-                ("Towers",         "total_towers",   "%.2f"),
-                ("Duration (min)", "duration_mins",  "%.1f"),
-            ]
-
-            dd_inp1 = st.columns(len(dd_metrics))
-            for col, (label, col_key, fmt) in zip(dd_inp1, dd_metrics):
-                col.markdown(f"**{label}**")
-                col.caption(f"Avg: {fmt % dd[col_key].mean()}")
-
-            dd_inp2 = st.columns(len(dd_metrics))
-            for col, (label, col_key, fmt) in zip(dd_inp2, dd_metrics):
-                line = col.number_input(
-                    "Line", min_value=0.0, value=None,
-                    placeholder="e.g. 39.5", step=0.5,
-                    key=f"dd_ou_{col_key}", label_visibility="collapsed",
-                )
-                if line is not None:
-                    n_over  = (dd[col_key] > line).sum()
-                    n_under = (dd[col_key] <= line).sum()
-                    p_over  = n_over / len(dd) * 100
-                    p_under = n_under / len(dd) * 100
-                    col.metric("Over",  f"{p_over:.1f}%",  f"{int(n_over)}/{len(dd)} games")
-                    col.metric("Under", f"{p_under:.1f}%", f"{int(n_under)}/{len(dd)} games")
+            over_under(dd, "Avg", "dd_ou")

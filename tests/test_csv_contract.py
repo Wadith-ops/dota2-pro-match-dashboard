@@ -53,6 +53,34 @@ class TestCsvRoundTrip:
 
         assert round_trip(rows)["patch_label"].tolist() == ["7.40b"]
 
+    def test_the_quality_flag_survives_as_a_boolean(self, patch_map):
+        rows = build_rows(
+            [{"match_id": 1, "objectives": [], "radiant_score": 1},
+             {"match_id": 2, "objectives": [{"type": "CHAT_MESSAGE_FIRSTBLOOD",
+                                             "time": 90}], "radiant_score": 1}],
+            patch_map,
+        )
+
+        assert round_trip(rows)["is_suspect"].tolist() == [True, False]
+
+    def test_a_blank_suspect_reason_reads_back_as_missing_not_empty(self, patch_map):
+        # The quirk CSV_DTYPES cannot fix: pandas reads an empty field as NaN
+        # whatever dtype is asked for. Consumers fill it, and this test is here
+        # so the next reader learns that from the suite rather than from a
+        # `nan` appearing in a match history table.
+        rows = build_rows(
+            [{"match_id": 1, "objectives": [], "radiant_score": 1},
+             {"match_id": 2, "objectives": [{"type": "CHAT_MESSAGE_FIRSTBLOOD",
+                                             "time": 90}], "radiant_score": 1}],
+            patch_map,
+        )
+
+        reason = round_trip(rows)["suspect_reason"]
+
+        assert reason.tolist()[0] == "no_objectives"
+        assert pd.isna(reason.tolist()[1])
+        assert reason.fillna("").tolist() == ["no_objectives", ""]
+
     def test_the_game_mode_flag_survives_as_a_boolean(self, patch_map):
         rows = build_rows(
             [{"match_id": 1, "game_mode": 2}, {"match_id": 2, "game_mode": 1}],
