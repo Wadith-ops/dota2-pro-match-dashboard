@@ -11,7 +11,7 @@ Importing this module has no side effects.
 """
 import json
 import re
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from html.parser import HTMLParser
 
 # The draft format the dataset is overwhelmingly played on. Anything else is
@@ -927,3 +927,517 @@ def events_in_year(events, year):
         event for event in events
         if event.get("start_date") and event["start_date"].startswith(f"{year}-")
     ]
+
+
+# ── Resolving Tier 1 events to OpenDota leagues ───────────────────────────────
+#
+# Liquipedia lists *events*; OpenDota lists *leagues*. They are not the same
+# object and they never agree on a name — "BLAST SLAM VII" against "Blast Slam
+# VII", "PGL Wallachia Season 7" against "PGL Wallachia 2026 Season 7". So names
+# are never compared. A league resolves to an event when every match it holds
+# falls inside that event's published window, and where a window holds more than
+# one such league the one with the highest share of matches involving teams
+# already in the dataset wins.
+#
+# Two consequences worth stating, because both were tested against real data and
+# both are why this survives where the obvious approaches do not (ADR-0001):
+#
+#   - Qualifiers, Division 2 circuits and regional events need no rule of their
+#     own. They run outside the main event's window, so the date test drops them
+#     without ever reading a name.
+#   - The overlap ranking is *relative*. It cannot gate — a qualifier scores
+#     higher than the event it qualifies for, because Tier 1 teams play in their
+#     own qualifiers — and no absolute threshold would do, since the correct
+#     winner scored 85.8% in one window and 74.5% in another.
+
+# Allowed slack at each end of a published window. Never yet needed: OpenDota's
+# first and last match dates matched Liquipedia's exactly in all nine played
+# 2026 events. It is here for a final that runs past midnight in the venue's
+# timezone, not for a case that is known.
+RESOLVER_GRACE_DAYS = 2
+
+# How far back resolution reaches. Liquipedia's calendar runs to 2005, and every
+# event on it that this project never mapped is, literally, awaiting resolution
+# — so without a horizon the first run walks OpenDota's pro match list back
+# twenty years, and every run after it walks back to the oldest event it still
+# could not resolve. A year covers the dataset's own era and turns the back
+# catalogue into a deliberate, separate pass: `tier1-pipeline-automation/14`.
+RESOLVER_LOOKBACK_DAYS = 365
+
+# Leagues OpenDota itself says are not competitive events. The tier field cannot
+# *select* Tier 1 — every league this project tracks is `professional`, one of
+# 2,468 (ADR-0001) — but a streamer showmatch series running inside a Tier 1
+# window is a candidate nobody wants to review. This prunes the pool; it never
+# picks the winner.
+#
+# A denylist rather than an allowlist, deliberately. A league with no tier, or
+# with a tier this project has never seen, stays a candidate: over-including
+# produces an ambiguity that gets reviewed, and under-including produces a
+# silent gap, which is the failure the whole feature exists to end.
+NON_COMPETITIVE_TIERS = frozenset({"excluded", "amateur"})
+
+
+def league_catalogue(api_leagues):
+    """
+    What OpenDota's `/leagues` response says about each league, keyed by id.
+
+    Only the name and the tier: the name so a report can be read, the tier so a
+    showmatch series can be kept out of the candidate pool.
+    """
+    return {
+        league["leagueid"]: {"name": league.get("name"), "tier": league.get("tier")}
+        for league in api_leagues or []
+        if league.get("leagueid") is not None
+    }
+
+
+def summarise_leagues(matches, catalogue=None):
+    """
+    Reduces a flat list of match rows to one summary per league: the window its
+    matches span, how many there are, and every team slot they filled.
+
+    Takes rows in the shape both `/leagues/{id}/matches` and `/proMatches`
+    return, which is what lets the shell shortlist from one and confirm from the
+    other. A row with no league or no start time is skipped — it cannot be
+    placed in a window, and a None reaching the min/max would decide one.
+
+    `team_slots` holds two entries per match, not one per distinct team, because
+    the overlap share is a share of *appearances*. An anonymous team keeps its
+    slot as None: a team we cannot identify is not an absent one, and a league
+    full of them is exactly the league that should score low.
+    """
+    catalogue = catalogue or {}
+    summaries = {}
+
+    for match in matches or []:
+        league_id  = match.get("leagueid")
+        start_time = match.get("start_time")
+
+        if league_id is None or start_time is None:
+            continue
+
+        day = datetime.fromtimestamp(start_time, tz=timezone.utc).strftime("%Y-%m-%d")
+
+        summary = summaries.get(league_id)
+        if summary is None:
+            listed = catalogue.get(league_id, {})
+            summary = summaries[league_id] = {
+                "league_id"  : league_id,
+                "name"       : listed.get("name"),
+                "tier"       : listed.get("tier"),
+                "first_date" : day,
+                "last_date"  : day,
+                "match_count": 0,
+                "team_slots" : [],
+            }
+
+        summary["first_date"]   = min(summary["first_date"], day)
+        summary["last_date"]    = max(summary["last_date"], day)
+        summary["match_count"] += 1
+        summary["team_slots"].extend(
+            [match.get("radiant_team_id"), match.get("dire_team_id")]
+        )
+
+    return summaries
+
+
+def known_team_ids(rows):
+    """
+    Every team already in the dataset, from its match rows.
+
+    This is what bootstraps the tiebreaker, and it is why the tiebreaker
+    degrades for an event with a wholly unfamiliar field. With a small closed
+    circuit that is theoretical — and an ambiguous window is surfaced rather
+    than resolved silently, so such a case would be visible.
+    """
+    return {
+        team_id
+        for row in rows or []
+        for team_id in (row.get("radiant_team_id"), row.get("dire_team_id"))
+        if team_id is not None
+    }
+
+
+def team_overlap(summary, known_teams):
+    """
+    The share of a league's team slots held by teams already in the dataset.
+
+    Zero for a league with no matches rather than a division by zero: a league
+    listed with nothing played is a real answer from OpenDota, not a fault.
+    """
+    slots = summary.get("team_slots") or []
+    if not slots:
+        return 0.0
+
+    return sum(1 for team_id in slots if team_id in known_teams) / len(slots)
+
+
+def _shift_date(iso_date, days):
+    """An ISO date moved by whole days, as an ISO date."""
+    return (date.fromisoformat(iso_date) + timedelta(days=days)).isoformat()
+
+
+def window_coverage(summary, start_date, end_date):
+    """
+    How much of an event's published window the league's matches actually span,
+    as a share from 0 to 1. A league running the full window scores 1.
+
+    This is what separates a tournament from another tournament nested inside
+    it. Tier 1 events overlap: FISSURE PLAYGROUND 2 ran from 23 October to 2
+    November 2025, entirely inside BLAST Slam IV's 14 October to 9 November —
+    so both leagues sit inside BLAST Slam IV's window and both are made
+    entirely of teams already tracked, scoring 100% each. Overlap cannot part
+    them and match count picks the wrong one, because the nested event happened
+    to play more games.
+
+    It ranks; it never gates. A tournament resolves on the day of its first
+    match, when it covers one day of a twelve-day window and scores 0.08 — so a
+    minimum score here would trade a wrong answer for no answer at all.
+    """
+    if not start_date or not end_date:
+        return 0.0
+
+    opens, closes = date.fromisoformat(start_date), date.fromisoformat(end_date)
+    window = (closes - opens).days + 1
+
+    if window <= 0:
+        return 0.0
+
+    # Clamped to the window: the grace lets a league begin two days early, and
+    # those two days are not more of the event than the event has.
+    first = max(date.fromisoformat(summary["first_date"]), opens)
+    last  = min(date.fromisoformat(summary["last_date"]), closes)
+
+    return max((last - first).days + 1, 0) / window
+
+
+def candidates_in_window(summaries, start_date, end_date,
+                         grace_days=RESOLVER_GRACE_DAYS):
+    """
+    The leagues whose matches all fall inside an event's window, by league id.
+
+    *All* of them, not merely some: a league spilling outside the window is a
+    different tournament that happens to overlap it. That single condition is
+    what excludes qualifiers, Division 2 circuits and regional events without
+    naming any of them.
+
+    An event with no published window has no candidates. Liquipedia writes
+    "TBD" for an event it has not scheduled, and an unscheduled event must not
+    take a candidate at random.
+    """
+    if not start_date or not end_date:
+        return []
+
+    opens  = _shift_date(start_date, -grace_days)
+    closes = _shift_date(end_date, grace_days)
+
+    return sorted(
+        (
+            summary for summary in summaries.values()
+            if summary.get("tier") not in NON_COMPETITIVE_TIERS
+            and opens <= summary["first_date"] and summary["last_date"] <= closes
+        ),
+        key=lambda summary: summary["league_id"],
+    )
+
+
+def resolve_tier1_events(events, summaries, known_teams,
+                         grace_days=RESOLVER_GRACE_DAYS):
+    """
+    One resolution per event, in the order the events were given.
+
+    A resolution names the winning league, its overlap score, whether the window
+    was contested, and every candidate ranked. An event with no candidate
+    resolves to None — a **gap**, which is coverage this project wants and does
+    not have, and is recorded rather than raised.
+
+    Candidates rank on team overlap, then on **window coverage**, then on match
+    count, then on league id — so a window that scores level resolves the same
+    way on every run rather than churning the ledger.
+
+    Coverage is the second key because Tier 1 events overlap each other. FISSURE
+    PLAYGROUND 2 ran entirely inside BLAST Slam IV's window in 2025, so both
+    leagues are candidates for BLAST Slam IV and both are made of teams already
+    tracked, scoring 100% each. Match count alone picks the nested event, which
+    played more games in fewer days. Coverage picks the one that ran the window.
+    """
+    resolutions = []
+
+    for event in events or []:
+        start_date, end_date = event.get("start_date"), event.get("end_date")
+
+        # Scored once, here, so a candidate's rank and the numbers reported
+        # beside it cannot drift apart.
+        candidates = [
+            {
+                "league_id"  : summary["league_id"],
+                "name"       : summary["name"],
+                "overlap"    : round(team_overlap(summary, known_teams), 4),
+                "coverage"   : round(
+                    window_coverage(summary, start_date, end_date), 4
+                ),
+                "match_count": summary["match_count"],
+            }
+            for summary in candidates_in_window(
+                summaries, start_date, end_date, grace_days
+            )
+        ]
+
+        candidates.sort(key=lambda candidate: (
+            -candidate["overlap"],
+            -candidate["coverage"],
+            -candidate["match_count"],
+            candidate["league_id"],
+        ))
+
+        winner = candidates[0] if candidates else None
+
+        resolutions.append({
+            "event"      : event.get("name"),
+            "start_date" : start_date,
+            "end_date"   : end_date,
+            "league_id"  : winner["league_id"] if winner else None,
+            "league_name": winner["name"] if winner else None,
+            "overlap"    : winner["overlap"] if winner else None,
+            "ambiguous"  : len(candidates) > 1,
+            "candidates" : candidates,
+        })
+
+    return resolutions
+
+
+def apply_resolutions(ledger, resolutions):
+    """
+    Writes each winning league's Tier 1 event onto its ledger record. Returns
+    `(ledger, changes)` — a new document, and the `(league_id, before, after)`
+    of every field it moved.
+
+    The **verdict is never touched**. Resolving is discovery; covering a
+    tournament is Wade's decision, taken by merging a pull request
+    (`tier1-pipeline-automation/15`). A resolver that set `active` itself would
+    be fetching leagues nobody approved.
+
+    Nothing is ever cleared. A mapping is only overwritten by a later, positive
+    resolution, so a run that walked back a fortnight cannot wipe the answers of
+    the run that walked back a year.
+    """
+    mapped = {
+        resolution["league_id"]: resolution["event"]
+        for resolution in resolutions or []
+        if resolution.get("league_id") is not None
+    }
+
+    entries = [dict(entry) for entry in ledger_entries(ledger)]
+    changes = []
+
+    for entry in entries:
+        event_name = mapped.get(entry.get("league_id"))
+
+        if event_name is None or entry.get("tier1_event") == event_name:
+            continue
+
+        changes.append((entry["league_id"], entry.get("tier1_event"), event_name))
+        entry["tier1_event"] = event_name
+
+    merged = dict(ledger) if isinstance(ledger, dict) else {}
+    merged["leagues"] = entries
+
+    return merged, changes
+
+
+def resolution_problems(ledger, resolutions):
+    """
+    The lines a run has to say out loud: a Tier 1 event resolved to a league
+    **nobody has judged**.
+
+    That is the whole feature in one sentence. It is the Esports World Cup,
+    found by the pipeline rather than by a friend asking why a team is missing.
+
+    Two things are deliberately silent here.
+
+    A `rejected` league is a decision on record, and a decision on record is
+    never proposed again — that is what the verdict is *for*, and a run that
+    re-raised it every morning would be the noise the ledger exists to end. The
+    Tier 1 events this project starts after are exactly this case. They are
+    still visible, with their verdict, in `tier1_resolution.json`.
+
+    A gap is not a problem either. It is recorded as a gap, and an unstarted
+    tournament printed as a fault every run is how a real one stops being read.
+    """
+    verdicts = {
+        entry.get("league_id"): entry.get("verdict")
+        for entry in ledger_entries(ledger)
+    }
+
+    settled  = (LEDGER_ACTIVE, LEDGER_REJECTED)
+    problems = []
+    claimed  = {}
+
+    for resolution in resolutions or []:
+        league_id = resolution.get("league_id")
+
+        if league_id is None:
+            continue
+
+        # One league cannot be two tournaments. `apply_resolutions` keys its
+        # writes by league id, so the second claim would quietly overwrite the
+        # first and one of the two events would read as a gap with no reason
+        # given. Overlapping Tier 1 windows make this reachable, so it is said
+        # out loud rather than resolved by whichever event came last.
+        claimed.setdefault(league_id, []).append(resolution["event"])
+
+        if verdicts.get(league_id) not in settled:
+            problems.append(
+                f"'{resolution['event']}' resolved to league {league_id} "
+                f"({resolution.get('league_name')}), whose verdict is "
+                f"'{verdicts.get(league_id, 'unrecorded')}' — nobody has "
+                f"decided whether to cover it"
+            )
+
+    for league_id, events in claimed.items():
+        if len(events) > 1:
+            problems.append(
+                f"league {league_id} was claimed by {len(events)} events "
+                f"({', '.join(events)}) — only one of them can be it, and only "
+                f"one mapping will survive"
+            )
+
+    return problems
+
+
+def events_awaiting_resolution(events, ledger, today,
+                               lookback_days=RESOLVER_LOOKBACK_DAYS):
+    """
+    The events worth spending API calls on, which is what decides how far back
+    the shell walks OpenDota's pro match list.
+
+    Three conditions, and each one is a cost avoided:
+
+    - **Not already mapped.** The ledger's answer does not expire.
+    - **Already started.** An event with no matches yet has nothing to find. It
+      is a gap, and it stays one until its first match is played — at which
+      point it resolves that same day rather than the day after the final.
+    - **Inside the lookback.** Liquipedia's list reaches back to 2005 and this
+      project has never mapped most of it, so without this the first run walks
+      twenty years of pro matches and every run after it walks back to the
+      oldest thing it still could not resolve.
+    """
+    mapped = {
+        entry.get("tier1_event") for entry in ledger_entries(ledger)
+        if entry.get("tier1_event")
+    }
+
+    opened_after = (today - timedelta(days=lookback_days)).isoformat()
+    today        = today.isoformat()
+
+    return [
+        event for event in events or []
+        if event.get("name") not in mapped
+        and event.get("start_date")
+        and opened_after <= event["start_date"] <= today
+    ]
+
+
+def resolution_walk_start(events, grace_days=RESOLVER_GRACE_DAYS):
+    """
+    The unix timestamp a pro match walk has to reach to cover these events: the
+    earliest window opening, less the same grace the window itself allows.
+
+    The grace matters. A league whose first match is two days early is exactly
+    the case the window grace exists for, and a walk stopping on the published
+    start date would not reach it.
+
+    Midnight UTC, so a walk is bounded in whole days like the window it serves.
+    Whether an event resolves must not depend on what time of day the job ran.
+
+    There is no floor here: `events_awaiting_resolution` has already dropped
+    everything outside the lookback, so its earliest event is inside it by
+    construction.
+    """
+    opens = min(date.fromisoformat(event["start_date"]) for event in events)
+    opens -= timedelta(days=grace_days)
+
+    return int(datetime(opens.year, opens.month, opens.day,
+                        tzinfo=timezone.utc).timestamp())
+
+
+def tier1_resolution_state(events, ledger, resolutions=None, previous=None):
+    """
+    One record per Tier 1 event: the league the ledger now maps it to, and the
+    candidates that were ranked to get there.
+
+    The mapping comes from the **ledger**, not from `resolutions`. A daily run
+    walks back only as far as its unresolved events, so most events are never
+    looked at — and an event resolved months ago must not regress to a gap
+    because of it.
+
+    `previous` is the last report's records, and it is what keeps the candidates
+    alive. An event is examined exactly once — the run after it resolves has
+    nothing to do and would otherwise blank the very evidence a contested window
+    was recorded for, a day after recording it and before anyone reviewed the
+    pull request. So this run's ranking wins where there is one, and the last
+    one stands where there is not.
+
+    A record with no `league_id` is a known gap.
+    """
+    mapped = {}
+    for entry in ledger_entries(ledger):
+        event_name = entry.get("tier1_event")
+        if event_name:
+            mapped.setdefault(event_name, entry)
+
+    examined = {
+        resolution["event"]: resolution for resolution in resolutions or []
+    }
+    remembered = {
+        record["event"]: record for record in previous or []
+    }
+
+    records = []
+
+    for event in events or []:
+        name     = event.get("name")
+        entry    = mapped.get(name) or {}
+        ranking  = examined.get(name) or remembered.get(name) or {}
+
+        records.append({
+            "event"      : name,
+            "start_date" : event.get("start_date"),
+            "end_date"   : event.get("end_date"),
+            "league_id"  : entry.get("league_id"),
+            "league_name": entry.get("name"),
+            "verdict"    : entry.get("verdict"),
+            "ambiguous"  : bool(ranking.get("ambiguous")),
+            "candidates" : ranking.get("candidates") or [],
+        })
+
+    return records
+
+
+def resolution_report(records, generated_at, grace_days=RESOLVER_GRACE_DAYS):
+    """
+    The document written to `data/tier1_resolution.json`, which the Upcoming tab
+    (`09`) and the approval pull request (`15`) read.
+
+    `generated_at` is passed in because reading the clock is I/O and this
+    function does none.
+    """
+    return {
+        "_comment": (
+            "Which OpenDota league each Liquipedia Tier 1 event resolved to, by "
+            "date window — never by name. A null league_id is a known gap: "
+            "coverage this project wants and does not have. 'ambiguous' marks a "
+            "window that held more than one candidate, ranked by the share of "
+            "matches involving teams already in the dataset. Generated by "
+            "opendota_pipeline.py; do not edit by hand."
+        ),
+        "generated_at"    : generated_at.isoformat(timespec="seconds"),
+        "grace_days"      : grace_days,
+        "event_count"     : len(records),
+        "gap_count"       : sum(1 for record in records
+                                if record.get("league_id") is None),
+        "ambiguous_count" : sum(1 for record in records
+                                if record.get("ambiguous")),
+        "attribution"     : LIQUIPEDIA_ATTRIBUTION,
+        "events"          : records,
+    }

@@ -43,14 +43,17 @@ for line in reversed(result.stdout.strip().splitlines()):
 # The ledger counts alongside the CSV: a run that fetched no matches but
 # discovered a new league has found the one thing this job exists to notice, and
 # exiting on the CSV alone would leave that pending entry dirty in the working
-# tree until someone happened to look.
+# tree until someone happened to look. The Tier 1 resolution counts for the same
+# reason and is safe to test, because it is only rewritten when the mapping
+# itself changes — a new tournament recognised, or a gap closed.
 #
 # `status --porcelain`, not `diff --stat`: a file the pipeline created rather
 # than edited is untracked, and `git diff` says nothing at all about an
 # untracked path. A ledger regenerated from scratch would have reported "nothing
 # to push" — and so would a first CSV.
 diff = run(["git", "status", "--porcelain", "--",
-            "data/matches_flat.csv", "data/leagues.json"], check=False)
+            "data/matches_flat.csv", "data/leagues.json",
+            "data/tier1_resolution.json"], check=False)
 if not diff.stdout.strip():
     log("No new matches and no new leagues — nothing to push.")
     log("=== Done ===\n")
@@ -73,6 +76,7 @@ DEPLOYED = [
     # See push_data.py — the two lists must stay in step.
     "data/tier1_calendar.json",
     "data/leagues.json",
+    "data/tier1_resolution.json",
     "dashboard.py",
 ]
 run(["git", "add", *[p for p in DEPLOYED if (HERE / p).exists()]])

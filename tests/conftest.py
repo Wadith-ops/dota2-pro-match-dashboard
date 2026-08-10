@@ -67,7 +67,11 @@ def patch_map():
     return {58: "7.39", 59: "7.40", 60: "7.41"}
 
 
-@pytest.fixture
+# The two page-sized fixtures below are session-scoped: the Liquipedia envelope
+# is 61 KB of HTML and the 2026 league pool is 29,000 match rows, and reloading
+# either for every test that reads it put four seconds on a suite that runs in
+# one. Nothing mutates them — they are recorded payloads, read and parsed.
+@pytest.fixture(scope="session")
 def liquipedia_response():
     """
     The full MediaWiki `action=parse` envelope for Tier 1 Tournaments, recorded
@@ -77,7 +81,28 @@ def liquipedia_response():
     return load_payload("liquipedia_tier1")
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def liquipedia_tier1_html(liquipedia_response):
     """Just the rendered HTML, which is what the pure parser takes."""
     return liquipedia_response["parse"]["text"]
+
+
+@pytest.fixture(scope="session")
+def league_matches_2026():
+    """
+    Every OpenDota league that played a match in 2026, with its full match list
+    — 78 leagues and 29,000 matches, recorded 2026-08-10. This is the candidate
+    pool the resolver ranks, and it is the whole pool rather than a shortlist so
+    that the date window is shown doing the excluding.
+
+    Match rows carry only the four fields the resolver reads — `leagueid`,
+    `start_time`, `radiant_team_id`, `dire_team_id` — because the full rows are
+    fourteen fields wide and none of the other ten resolve anything. `name` and
+    `tier` per league come from `/leagues`.
+
+    `known_team_ids` is the 43 teams in the dataset as it stood at 1,605
+    matches: today's CSV less the Esports World Cup and 1win Essence II, which
+    were backfilled afterwards. That is the state the resolution was designed
+    against, and the only one in which those two events score below 100%.
+    """
+    return load_payload("league_matches_2026")

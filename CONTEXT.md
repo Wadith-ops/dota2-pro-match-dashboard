@@ -34,7 +34,7 @@ Called a **tournament** in the dashboard UI; *league* is the API's word and the 
 
 **Seeding by existence** — the rule that makes `pending` mean something. Every league in OpenDota's response at seed time was decided then and there, so only ids appearing afterwards can be pending. Never by id range: The International 2013 is league `65006`, above every 2026 league, so an id cutoff would mark the whole back catalogue as new. See ADR-0001.
 
-**Known gap** — a Tier 1 event on Liquipedia's list with no matching OpenDota league. Distinct from a rejected league: a gap is coverage the project *wants* and does not yet have. Distinct again from a pending league, which is data OpenDota has and the project has not yet judged.
+**Known gap** — a Tier 1 event on Liquipedia's list with no matching OpenDota league. Distinct from a rejected league: a gap is coverage the project *wants* and does not yet have. Distinct again from a pending league, which is data OpenDota has and the project has not yet judged. Recorded per event in `data/tier1_resolution.json`, as an entry whose `league_id` is null.
 
 ### Time
 
@@ -91,6 +91,28 @@ Zero is a time, not an absence. A first blood on the horn reads `first_blood_tim
 **Event window** — a Tier 1 event's start and end dates. The key everything resolves on, because the two sources name the same tournament differently — `BLAST SLAM VII` against `Blast Slam VII`, `PGL Wallachia Season 7` against `PGL Wallachia 2026 Season 7`. A league's matches falling inside an event's window is what identifies it.
 
 **Tier 1 calendar** — every Tier 1 event with its name, window and prize pool, read from Liquipedia's rendered tournaments table. 324 events across 2005–2027; 13 in 2026. Obtained from the free MediaWiki API under its terms of use, cached for a day, with `data/tier1_calendar.json` as the committed fallback. See ADR-0006.
+
+**Resolver** — the join between the two lists: which OpenDota league *is* a given Liquipedia Tier 1 event. It runs at the end of every pipeline run and writes its answer twice — as `tier1_event` on the league's ledger record, and per event in `data/tier1_resolution.json`. It never changes a verdict: recognising a tournament and deciding to cover it are two different acts, and the second is Wade's.
+
+**Candidate** — a league whose matches *all* fall inside an event's window, within the ±2 day grace. Not some of them: a league spilling outside the window is a different tournament that happens to overlap. That single condition is what excludes qualifiers, Division 2 circuits and regional events without any rule naming them.
+
+Leagues OpenDota marks `excluded` or `amateur` are not candidates — that is the source stating a league is not a competitive event, which is a different claim from `professional`, and the field is never used to rank or to select. See ADR-0009.
+
+**Team overlap** — the first tiebreaker between two candidates in one window. It is the share of a league's **team slots** — two per match, so a team playing ten matches counts ten times — held by a team already in the dataset. An anonymous team keeps its slot in the denominator.
+
+It is a *relative* ranking and can never be a threshold. Qualifiers outscore the events they qualify for, because Tier 1 teams play in their own qualifiers, and the correct winner scored 85.8% in one 2026 window against 74.5% in another. See ADR-0001.
+
+**Window coverage** — the second tiebreaker: how much of the event's published window the league's matches actually span, from 0 to 1.
+
+It exists because Tier 1 events **nest inside one another**. FISSURE PLAYGROUND 2 ran 23 October to 2 November 2025, entirely inside BLAST Slam IV's 14 October to 9 November, so both leagues are candidates for BLAST Slam IV and both are made of teams already tracked — 100% each. Team overlap cannot part them, and the nested event played *more* matches in *fewer* days, so ranking on volume picks the wrong one. Coverage picks the league that ran the window.
+
+Like overlap it ranks and never gates. A tournament resolves on the day of its first match, when it covers one day of a twelve-day window; a minimum score would trade a wrong answer for no answer at all.
+
+**Ambiguous window** — an event window holding more than one candidate. The highest overlap wins, and every candidate is recorded with its score so a wrong mapping can be seen before it enters the dataset. Three of the nine played 2026 events were ambiguous and all three resolved correctly, by margins of 46 to 91 percentage points.
+
+**Awaiting resolution** — an event that has started, that the ledger does not yet map, and that began within the last year. These are the only events that cost API calls: they set how far back the run walks OpenDota's pro match list, and when there are none the resolver makes no OpenDota calls at all.
+
+The year is a **lookback horizon**, not a tidy-up. Liquipedia's calendar reaches back to 2005 and this project has never mapped most of it, so without a horizon every event ever held is awaiting resolution and the first run walks twenty years of pro matches. Auditing the back catalogue is a deliberate, separate pass.
 
 Only the **rendered tournaments table** is authoritative. The same page carries a Timeline template that deliberately includes Tier 2 events by the listed organisers; reading it is what once classified FISSURE Universe Episode 8 as Tier 1 and 1win Essence II as not. Episodes 4 and 6 of that series *are* Tier 1 — the distinction is per event, not per series.
 
