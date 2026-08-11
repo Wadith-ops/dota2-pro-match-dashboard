@@ -110,6 +110,15 @@ Like overlap it ranks and never gates. A tournament resolves on the day of its f
 
 **Ambiguous window** — an event window holding more than one candidate. The highest overlap wins, and every candidate is recorded with its score so a wrong mapping can be seen before it enters the dataset. Three of the nine played 2026 events were ambiguous and all three resolved correctly, by margins of 46 to 91 percentage points.
 
+**Known gap** — a Tier 1 event the resolver mapped to no league at all: a record in `data/tier1_resolution.json` with a null `league_id`. Two states, told apart by the event's own start date and never conflated, because they are the same absence and completely different news:
+
+- **Upcoming** — the event has not started. There is nothing to find, and this is the normal state of every future tournament. The International 2026 sits here until 13 August.
+- **Overdue** — the event has started or finished and this project still has no data for it. This is the coverage hole the whole feature exists to make visible — the Esports World Cup, two months late.
+
+The boundary is inclusive: matches are played on day one, so a gap on day one is already overdue. An event with no published start date is upcoming, since nothing can be late without a date to be late against.
+
+**Awaiting a verdict** — a league the resolver mapped to a Tier 1 event whose ledger verdict is neither `active` nor `rejected`. Distinct from *awaiting resolution* below: that is about finding the league, this is about deciding to cover it. The decision is Wade's and is taken by merging a pull request, so the dashboard reports this queue and never writes to it.
+
 **Awaiting resolution** — an event that has started, that the ledger does not yet map, and that began within the last year. These are the only events that cost API calls: they set how far back the run walks OpenDota's pro match list, and when there are none the resolver makes no OpenDota calls at all.
 
 The year is a **lookback horizon**, not a tidy-up. Liquipedia's calendar reaches back to 2005 and this project has never mapped most of it, so without a horizon every event ever held is awaiting resolution and the first run walks twenty years of pro matches. Auditing the back catalogue is a deliberate, separate pass.

@@ -435,6 +435,13 @@ LEDGER_PENDING  = "pending"
 
 LEDGER_VERDICTS = (LEDGER_ACTIVE, LEDGER_REJECTED, LEDGER_PENDING)
 
+# A decision on record. Everything else — `pending`, a misspelled verdict, a
+# league the ledger has never heard of — is still awaiting one, and a misspelling
+# is deliberately on this side of the line: it fails the way a rejection does,
+# so it must be raised rather than treated as settled. Both the run's `ATTENTION`
+# lines and the dashboard's queue read this, and they must not diverge.
+SETTLED_VERDICTS = (LEDGER_ACTIVE, LEDGER_REJECTED)
+
 # The name a league is logged and recorded under when the ledger gives none.
 UNKNOWN_LEAGUE = "Unknown League"
 
@@ -1269,7 +1276,6 @@ def resolution_problems(ledger, resolutions):
         for entry in ledger_entries(ledger)
     }
 
-    settled  = (LEDGER_ACTIVE, LEDGER_REJECTED)
     problems = []
     claimed  = {}
 
@@ -1286,7 +1292,7 @@ def resolution_problems(ledger, resolutions):
         # out loud rather than resolved by whichever event came last.
         claimed.setdefault(league_id, []).append(resolution["event"])
 
-        if verdicts.get(league_id) not in settled:
+        if verdicts.get(league_id) not in SETTLED_VERDICTS:
             problems.append(
                 f"'{resolution['event']}' resolved to league {league_id} "
                 f"({resolution.get('league_name')}), whose verdict is "
@@ -1441,3 +1447,119 @@ def resolution_report(records, generated_at, grace_days=RESOLVER_GRACE_DAYS):
         "attribution"     : LIQUIPEDIA_ATTRIBUTION,
         "events"          : records,
     }
+
+
+# %%
+# # Reading the resolution — what the Upcoming tab shows
+#
+# The resolver's report answers two questions, and the tab is those two lists.
+# Both are pure reads of `resolution_report`'s `events`: nothing here recomputes
+# a resolution, and nothing here writes. Approval is a merged pull request, not
+# a button in a public app — see `tier1-pipeline-automation/09`.
+
+# A gap whose event has not started yet. Nothing is wrong: OpenDota has no
+# matches because none have been played.
+GAP_UPCOMING = "upcoming"
+
+# A gap whose event is under way or finished. This one means something is
+# broken — the tournament is being played and this project has no data for it.
+GAP_OVERDUE = "overdue"
+
+
+def coverage_gaps(records, today):
+    """
+    The Tier 1 events with no OpenDota league, each marked `upcoming` or
+    `overdue`.
+
+    The two are the same absence and completely different news, which is why
+    they are told apart here rather than left to the reader. An event that has
+    not started has nothing to find; one that started and still has no league is
+    the coverage hole this whole feature exists to surface — the Esports World
+    Cup, two months late.
+
+    The boundary is the event's own start date, **inclusive**: matches are
+    played on day one, so a gap on day one is already a gap. An event with no
+    published start date — Liquipedia writes "TBD" — is upcoming, since nothing
+    can be late without a date to be late against.
+
+    Ordered overdue first, then soonest upcoming, so the row that needs acting
+    on is the row at the top.
+    """
+    gaps = []
+
+    for record in records or []:
+        if record.get("league_id") is not None:
+            continue
+
+        start = record.get("start_date")
+        state = (GAP_OVERDUE if start and start <= today.isoformat()
+                 else GAP_UPCOMING)
+
+        gaps.append({
+            "event"     : record.get("event"),
+            "start_date": start,
+            "end_date"  : record.get("end_date"),
+            "state"     : state,
+        })
+
+    # An undated event sorts last within its group rather than first, which is
+    # where a plain `or ""` would put it.
+    return sorted(gaps, key=lambda gap: (
+        gap["state"] != GAP_OVERDUE,
+        gap["start_date"] is None,
+        gap["start_date"] or "",
+    ))
+
+
+def awaiting_verdict(records):
+    """
+    The Tier 1 events that resolved to a league **nobody has judged** — the
+    pull request queue, as data.
+
+    `SETTLED_VERDICTS` is the same test the run's `ATTENTION` lines use, shared
+    rather than restated: the queue on the dashboard and the queue in the log
+    must be the same queue. A gap is never here; it has no league to approve.
+
+    Each record carries the evidence for the decision, taken from the winning
+    candidate's **own** row rather than the first one. `candidates` is ranked,
+    not keyed, and in a contested window the first entry is the winner only by
+    coincidence of ordering.
+
+    Newest event first: the tournament being played now is the one worth
+    covering now.
+    """
+    awaiting = []
+
+    for record in records or []:
+        league_id = record.get("league_id")
+
+        if league_id is None or record.get("verdict") in SETTLED_VERDICTS:
+            continue
+
+        candidates = record.get("candidates") or []
+        winner = next(
+            (candidate for candidate in candidates
+             if candidate.get("league_id") == league_id),
+            {},
+        )
+
+        awaiting.append({
+            "event"       : record.get("event"),
+            "start_date"  : record.get("start_date"),
+            "end_date"    : record.get("end_date"),
+            "league_id"   : league_id,
+            "league_name" : record.get("league_name"),
+            "verdict"     : record.get("verdict"),
+            "match_count" : winner.get("match_count"),
+            "overlap"     : winner.get("overlap"),
+            "ambiguous"   : bool(record.get("ambiguous")),
+            "runners_up"  : max(len(candidates) - 1, 0),
+            # Written by `tier1-pipeline-automation/15`, which opens the pull
+            # request that proposes the league. Read here so that landing 15
+            # lights up the link without touching the tab.
+            "pull_request": record.get("pull_request"),
+        })
+
+    return sorted(
+        awaiting, key=lambda record: record["start_date"] or "", reverse=True,
+    )

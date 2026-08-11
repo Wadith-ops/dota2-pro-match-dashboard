@@ -6,14 +6,38 @@ import plotly.graph_objects as go
 import streamlit as st
 from pathlib import Path
 
-from core import CSV_DTYPES, patch_sort_key
+from core import (
+    CSV_DTYPES,
+    GAP_OVERDUE,
+    LIQUIPEDIA_ATTRIBUTION,
+    awaiting_verdict,
+    coverage_gaps,
+    patch_sort_key,
+)
 
 st.set_page_config(page_title="Dota 2 Pro Match Analysis", layout="wide")
 
 DATA_PATH = Path(__file__).parent / "data" / "matches_flat.csv"
 META_PATH = Path(__file__).parent / "data" / "meta.json"
+RESOLUTION_PATH = Path(__file__).parent / "data" / "tier1_resolution.json"
 
 ANON_NAMES = {"Radiant", "Dire"}
+
+# Where a proposed league is approved. Approval is merging a pull request, which
+# is deliberately the only way: this app is public and deployed from git with an
+# ephemeral filesystem, so an approve button here would mean a repository write
+# token in a public app. Until `tier1-pipeline-automation/15` records the URL of
+# the specific pull request on each record, this is the honest link — the list
+# the proposal will appear in.
+REPO_PULLS_URL = "https://github.com/Wadith-ops/dota2-pro-match-dashboard/pulls"
+
+LIQUIPEDIA_TIER1_URL = "https://liquipedia.net/dota2/Tier_1_Tournaments"
+CC_BY_SA_URL = "https://creativecommons.org/licenses/by-sa/3.0/"
+
+# What an event with no name is called on the page. `coverage_gaps` reads the
+# name with `.get`, so it can be absent, and a bare None in a joined sentence
+# raises rather than reads oddly.
+UNNAMED_EVENT = "(unnamed event)"
 
 
 @st.cache_data(ttl=1800)
@@ -35,16 +59,31 @@ def load_data():
 
 
 @st.cache_data(ttl=1800)
-def load_meta() -> dict:
+def load_json(path: Path) -> dict:
     """
-    Reads data/meta.json. Returns {} when it is absent or malformed, so the
-    coverage line degrades to CSV-derived figures instead of failing the page.
+    One of the pipeline's committed side files, or {} when it is absent or
+    malformed.
+
+    Every caller degrades rather than fails: a page that cannot read
+    `meta.json` still has the CSV to count, and one that cannot read the
+    resolution still has every figure on it. A missing side file must never be
+    the reason the dashboard is down.
     """
     try:
-        meta = json.loads(META_PATH.read_text(encoding="utf-8"))
+        document = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
-    return meta if isinstance(meta, dict) else {}
+    return document if isinstance(document, dict) else {}
+
+
+def load_meta() -> dict:
+    """What the last pipeline run recorded about its own coverage."""
+    return load_json(META_PATH)
+
+
+def load_resolution() -> dict:
+    """Which Tier 1 event resolved to which OpenDota league, and which to none."""
+    return load_json(RESOLUTION_PATH)
 
 
 def measured(df: pd.DataFrame) -> pd.DataFrame:
@@ -117,6 +156,38 @@ def format_date(value) -> str | None:
     if pd.isna(stamp):
         return None
     return f"{stamp.day} {stamp:%b %Y}"
+
+
+def format_window(start, end) -> str:
+    """
+    An event's date window, as '13 Aug 2026 – 23 Aug 2026'.
+
+    Liquipedia publishes "TBD" for an unscheduled event and the parser keeps
+    that as no date, so a blank window is a real state and says so.
+    """
+    opens, closes = format_date(start), format_date(end)
+
+    if opens and closes:
+        return opens if opens == closes else f"{opens} – {closes}"
+
+    return opens or closes or "Dates TBD"
+
+
+def window_verdict(record: dict) -> str:
+    """
+    Whether the league in this row was the only candidate in its event's window,
+    or won a contested one.
+
+    A contested window is where the resolver made a *judgement* rather than
+    found the single league that fitted, so it is the row most worth a second
+    look before the verdict is given. The runners-up and their scores are in
+    `data/tier1_resolution.json`.
+    """
+    if not record["ambiguous"]:
+        return "Only candidate"
+
+    others = record["runners_up"]
+    return f"⚠ Contested — {others} other candidate{'' if others == 1 else 's'}"
 
 
 def coverage_line(df: pd.DataFrame, meta: dict) -> str:
@@ -259,6 +330,147 @@ def over_under(selection: pd.DataFrame, avg_label: str, key_prefix: str) -> None
                        f"{n_under}/{len(priced)} games")
 
 
+def upcoming_tab() -> None:
+    """
+    Coverage state, where Wade already looks: the Tier 1 events with no OpenDota
+    league, and the leagues the resolver found that nobody has judged. Both read
+    straight out of `data/tier1_resolution.json` and neither touches the
+    selection, which is why this tab renders before the empty-selection guard.
+
+    **Read-only, and it stays that way.** There is no approve button: this app is
+    public and Streamlit Cloud deploys it from git onto an ephemeral filesystem,
+    so writing a verdict back would mean a repository write token in a public
+    app. Approval is merging a pull request, which is one tap on a phone. See
+    `tier1-pipeline-automation/09`.
+    """
+    st.subheader("Upcoming & Coverage")
+
+    resolution = load_resolution()
+    events = resolution.get("events") or []
+
+    if not events:
+        # Distinct from "no gaps", and the difference matters: this is the page
+        # not knowing, where "no gaps" is the page knowing there is nothing to
+        # report. Saying the second while meaning the first is the kind of false
+        # assurance the coverage line was built to stop.
+        st.warning(
+            "No coverage record to show. `data/tier1_resolution.json` is written "
+            "by the pipeline; this deployment is missing it or it holds no "
+            "events. Nothing else on the dashboard is affected."
+        )
+    else:
+        resolved_on = format_date(resolution.get("generated_at"))
+        if resolved_on:
+            st.caption(f"Coverage resolved **{resolved_on}** · "
+                       f"**{len(events)}** Tier 1 events on the horizon")
+
+        gaps = coverage_gaps(events, pd.Timestamp.now(tz="UTC").date())
+        overdue = [gap for gap in gaps if gap["state"] == GAP_OVERDUE]
+
+        # ── Known gaps ───────────────────────────────────────────────────────
+        st.markdown("### Known gaps")
+        st.caption(
+            "Tier 1 events with no OpenDota league. An event that has not "
+            "started has nothing to find yet; one that has started and still "
+            "has no league is coverage this dashboard is missing."
+        )
+
+        if not gaps:
+            st.success("No gaps — every Tier 1 event on the horizon has a league.")
+        else:
+            # The distinction is the point of the list, so it is said in words
+            # above the table as well as marked in it. An overdue gap is the
+            # failure this feature exists to make visible; an upcoming one is
+            # just a calendar.
+            if overdue:
+                st.error(
+                    f"**{len(overdue)} event{'s' if len(overdue) != 1 else ''} "
+                    f"under way or finished with no data:** "
+                    + ", ".join(gap["event"] or UNNAMED_EVENT for gap in overdue)
+                )
+
+            # "Overdue" and "Upcoming" are the glossary's two states, and the
+            # labels are those words. A synonym here — "Scheduled" — reads as a
+            # third state to anyone holding CONTEXT.md.
+            gap_table = pd.DataFrame([{
+                "Status": ("🔴 Overdue" if gap["state"] == GAP_OVERDUE
+                           else "🕓 Upcoming"),
+                "Event": gap["event"] or UNNAMED_EVENT,
+                "Dates": format_window(gap["start_date"], gap["end_date"]),
+            } for gap in gaps])
+
+            st.dataframe(gap_table, use_container_width=True, hide_index=True)
+
+        st.divider()
+
+        # ── Pending candidates ───────────────────────────────────────────────
+        st.markdown("### Awaiting a verdict")
+        st.caption(
+            "Leagues the resolver matched to a Tier 1 event that nobody has "
+            "decided to cover or reject. Approval is merging the pull request "
+            "that proposes them — this page only reports."
+        )
+
+        pending = awaiting_verdict(events)
+
+        if not pending:
+            st.success(
+                "Nothing awaiting a decision — every resolved league has a verdict."
+            )
+        else:
+            pending_table = pd.DataFrame([{
+                "Event": record["event"] or UNNAMED_EVENT,
+                "Dates": format_window(record["start_date"], record["end_date"]),
+                "League": record["league_name"] or "—",
+                "League ID": record["league_id"],
+                # Absent rather than zero: a run that never re-ranked this
+                # window carries the mapping without the evidence, and "0
+                # matches" would be a different and false claim.
+                "Matches": record["match_count"],
+                "Team overlap": (None if record["overlap"] is None
+                                 else record["overlap"] * 100),
+                # A contested window is the row most worth a second look, so it
+                # is stated rather than left to be inferred from a count.
+                "Window": window_verdict(record),
+                "Verdict": record["verdict"] or "unrecorded",
+                "Review": record["pull_request"] or REPO_PULLS_URL,
+            } for record in pending])
+
+            # Until `15` records the URL of the pull request that proposes a
+            # league, the link is the repository's open pull requests and the
+            # label says exactly that. Calling a list of every open PR "the pull
+            # request" would be the tab making a claim it cannot keep.
+            proposed = any(record["pull_request"] for record in pending)
+
+            st.dataframe(
+                pending_table, use_container_width=True, hide_index=True,
+                column_config={
+                    "League ID": st.column_config.NumberColumn(format="%d"),
+                    # A missing count makes the column float, and "60.0
+                    # matches" is not a thing. Blank stays blank either way.
+                    "Matches": st.column_config.NumberColumn(format="%d"),
+                    "Team overlap": st.column_config.NumberColumn(format="%.1f%%"),
+                    "Review": st.column_config.LinkColumn(
+                        display_text="Pull request" if proposed else "Open PRs"
+                    ),
+                },
+            )
+
+    st.divider()
+
+    # ── Attribution ──────────────────────────────────────────────────────────
+    # A condition of using Liquipedia's free API, not a courtesy — the Tier 1
+    # list on this tab *is* their data. It credits the source of the list rather
+    # than the rows, so it renders whether or not there are any, and it sits
+    # outside the branch above for that reason. See ADR-0006.
+    st.caption(
+        f"{LIQUIPEDIA_ATTRIBUTION} — event names and date windows from "
+        f"[Tier 1 Tournaments]({LIQUIPEDIA_TIER1_URL}), used under "
+        f"[CC BY-SA 3.0]({CC_BY_SA_URL}). League ids and match counts are from "
+        "the OpenDota API."
+    )
+
+
 @st.cache_data
 def build_team_perspective(df: pd.DataFrame) -> pd.DataFrame:
     base_cols = [
@@ -354,21 +566,41 @@ st.title("Dota 2 Pro Match Analysis")
 # exactly when "what is actually in here?" needs answering.
 st.caption(coverage_line(raw, load_meta()))
 
-if len(filtered) == 0:
-    st.warning("No matches match the current filters. Try broadening your selection.")
-    st.stop()
+# Why the guard is split from the `st.stop()` it belongs to: Tabs 1–5 are all
+# computed from the selection and have nothing to draw when it is empty, but
+# Upcoming reads none of it, and it is the tab that answers "why is a tournament
+# missing?" — the question an empty page provokes. So the warning renders here,
+# above the tabs and worded exactly as before; the stop waits until Upcoming has
+# drawn. Same reasoning as the coverage line above, which has always rendered
+# before this guard.
+selection_note = None
 
-if len(measured_matches) == 0:
+if len(filtered) == 0:
+    selection_note = "No matches match the current filters. Try broadening your selection."
+elif len(measured_matches) == 0:
     # Reachable only by filtering down to suspect matches alone. Saying so beats
     # a page of NaNs, and beats quietly averaging zeroes that mean "unknown".
-    st.warning(
+    selection_note = (
         f"All {len(filtered)} matches in this selection are missing their objective "
         "data, so there are no figures to show. Broaden the selection to see them "
         "alongside complete matches."
     )
-    st.stop()
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["Team", "Tournament", "Meta Trends", "Head to Head", "Drilldown"])
+if selection_note:
+    st.warning(selection_note)
+
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
+    ["Team", "Tournament", "Meta Trends", "Head to Head", "Drilldown", "Upcoming"]
+)
+
+# Out of tab order on purpose — see the guard above. Everything it draws comes
+# from `data/tier1_resolution.json` and nothing from the selection, so it is the
+# one tab that can be drawn before the page decides whether it has figures.
+with tab6:
+    upcoming_tab()
+
+if selection_note:
+    st.stop()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1084,3 +1316,5 @@ with tab5:
             # ── Over/Under probability calculator ─────────────────────────
             st.subheader("Over/Under Calculator")
             over_under(dd, "Avg", "dd_ou")
+
+

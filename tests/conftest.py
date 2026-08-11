@@ -62,6 +62,20 @@ def suspect_matches():
 
 
 @pytest.fixture
+def tier1_resolution():
+    """
+    `data/tier1_resolution.json` as the resolver wrote it on 2026-08-10: 16
+    events, 7 of them gaps, 3 contested windows.
+
+    A recorded copy rather than a read of the live file. The live one moves
+    every time a tournament resolves — The International resolves the day it
+    starts — and a test asserting that it is still a gap would then be asserting
+    that the pipeline had stopped working.
+    """
+    return load_payload("tier1_resolution")
+
+
+@pytest.fixture
 def patch_map():
     """The subset of the OpenDota patch constants the fixtures need."""
     return {58: "7.39", 59: "7.40", 60: "7.41"}

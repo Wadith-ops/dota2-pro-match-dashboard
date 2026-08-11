@@ -32,7 +32,9 @@ Single-context — one `CONTEXT.md` plus `docs/adr/` at the repo root. See `docs
 
 **The resolver closes the loop** (`08`, 2026-08-11): every pipeline run reads Liquipedia's Tier 1 calendar and works out which OpenDota league each event is, by date window and never by name. The answer is written as `tier1_event` on the ledger record and per event in `data/tier1_resolution.json`, where an entry with no league is a known gap. Over the 2026 list it reproduces the design session exactly — six windows with one candidate, three contested and correctly ranked, four gaps — and `tests/test_resolver.py::TestThe2026Season` holds that against 78 recorded leagues. See ADR-0009.
 
-What is still missing is the last mile: a resolved league that nobody has approved is an `ATTENTION` line in the run's output, not yet a pull request. That is `15`. The rest of `.scratch/tier1-pipeline-automation/` rebuilds correctness and hosting. Read ADR-0001 through 0004 before touching the pipeline, and ADR-0009 as well before touching the resolver.
+**Coverage state is on the dashboard** (`09`, 2026-08-11): a sixth tab reads `data/tier1_resolution.json` and shows the Tier 1 events with no league — marked Overdue once the event has started, which is the case that means something is broken — and the leagues awaiting a verdict, with the evidence that resolved them. It is read-only by design and carries the Liquipedia attribution whether or not either list has rows.
+
+What is still missing is the last mile: a resolved league that nobody has approved is an `ATTENTION` line in the run's output and a row on that tab, not yet a pull request. That is `15`. The rest of `.scratch/tier1-pipeline-automation/` rebuilds correctness and hosting. Read ADR-0001 through 0004 before touching the pipeline, and ADR-0009 as well before touching the resolver.
 
 ## File Structure
 
@@ -108,16 +110,20 @@ Non-negotiable when writing any new analysis or chart:
 - **Team overlap and window coverage rank candidates; neither ever gates them.** There is no minimum score for either. Qualifiers outscore the events they qualify for; the correct winner scored 85.8% on teams in one real window; and a tournament resolving on the day of its first match covers one day in twelve. Adding a threshold to either re-breaks what ADR-0001 was written to prevent, and would trade a wrong answer for no answer.
 - **Tier 1 events nest inside one another, so a window can hold the right league and a smaller wrong one.** FISSURE PLAYGROUND 2 ran entirely inside BLAST Slam IV's 2025 window; both are 100% tracked teams, and the nested one played *more* matches. Coverage is what parts them. Never rank on match count before coverage.
 - **The resolver never changes a verdict.** It writes `tier1_event` and nothing else. Recognising a tournament is the pipeline's job; deciding to cover it is Wade's, taken by merging a pull request (`15`).
+- **The Upcoming tab is read-only, and no amount of convenience changes that.** No approve button, no write credential, no repository token — the app is public and Streamlit Cloud deploys it from git onto an ephemeral filesystem, so a button that set a verdict would mean a repository write token in a public app. Approval is merging the pull request, which is one tap on a phone. See `tier1-pipeline-automation/09`.
+- **Liquipedia attribution renders whenever the Upcoming tab does, including when both its lists are empty.** It credits the source of the Tier 1 list, not the rows, so it must not be tied to a table that can be empty. This is a condition of the free API, not a courtesy — see ADR-0006.
 - **`tier` may prune the candidate pool and may not do anything else.** `excluded` and `amateur` are dropped before ranking, because that is OpenDota saying a league is not a competitive event. `professional` says nothing — 2,468 leagues carry it — so it must never select, rank, or break a tie. See ADR-0009.
 - **Closing an issue is three moves, not one:** set `status: done`/`dropped`, move the file to `.scratch/_done/` mirroring its path, and move its row to Closed in `.scratch/index.md` — all in the same turn. See `docs/agents/issue-tracker.md`.
 
 ## Dashboard (dashboard.py)
 
-Streamlit + Plotly. 5-tab layout with global sidebar filters.
+Streamlit + Plotly. 6-tab layout with global sidebar filters.
 
 **Sidebar filters:** League (multi), Team (multi, empty = all), Patch (multi), Side (Radiant/Dire/Both — single team only)
 
 **Coverage line:** a caption between the title and the tabs, stating data date, latest match date, match count, tournament count and excluded count. It renders *before* the empty-filter guard, so it still shows when the filters select nothing.
+
+**The empty-selection guard is deliberately split from its `st.stop()`.** The warning renders above the tabs, then `st.tabs(...)` is built and **Upcoming is drawn**, and only then does the page stop. Tabs 1–5 are all computed from the selection and have nothing to draw when it is empty; Upcoming reads none of it, and it is the tab that answers the question an empty page provokes. Rejoining the two would delete coverage state — and the Liquipedia attribution with it — from exactly the moment it is most wanted. This is why `with tab6:` appears before `with tab1:` in the file.
 
 **Tabs:**
 - **1 — Team**: 9-metric KPI row, then Roshan / Kills / Barracks each as grouped bars by patch and by tournament, plus game length histogram and box plot by patch
@@ -125,6 +131,7 @@ Streamlit + Plotly. 5-tab layout with global sidebar filters.
 - **3 — Meta Trends**: per-patch KPI columns + 4 comparison charts (roshans, kills, barracks, game length violin)
 - **4 — Head to Head**: two teams; record (matches, wins, win %) over every match, 4 avg stat bar charts (A / B / match total), match history with a `Data` column marking flagged rows, Both Lost Racks % + Both Slew Rosh %, over/under calculator
 - **5 — Drilldown**: independent tournament + team filters (at least one required); record/win % if a team is selected, 4 avg stat bar charts, match history with the same `Data` column, same probability stats and over/under calculator as H2H
+- **6 — Upcoming**: coverage state, read straight out of `data/tier1_resolution.json` and computed from none of the selection. Known gaps (marked **Overdue** or **Upcoming**, the glossary's two words and not synonyms of them; overdue also called out in an error banner above the table), then the leagues awaiting a verdict with their match count, team overlap and contested-window mark, then the Liquipedia attribution. The `Review` link is the repository's open pull requests and says so — it becomes *the* proposing pull request when `15` records a URL on the record
 
 **Key helpers:**
 - `load_data()` — reads the CSV with `core.CSV_DTYPES`, parses `start_time`, fills the blank `suspect_reason` back to `""`, adds the derived columns listed in `CONTEXT.md`. `patch_label` and the quality flags are **not** derived here — they come from the CSV
@@ -133,7 +140,10 @@ Streamlit + Plotly. 5-tab layout with global sidebar filters.
 - `match_history(selection)` / `over_under(selection, avg_label, key_prefix)` — the two blocks Head to Head and Drilldown share. Both take the **whole** selection: `match_history` lists all of it and marks the flagged rows in a `Data` column, `over_under` measures it internally so no caller can price a line off a match with no recorded objectives
 - `build_team_perspective(df)` — pivots match rows into one row per team per match
 - `by_patch(df)` / `patch_order(df)` — release order for a per-patch frame and for a category list. Both wrap `core.patch_sort_key`; every patch axis in the app comes from one of them
-- `load_meta()` — reads `data/meta.json`, returning `{}` when absent or malformed
+- `load_json(path)` — a committed side file, or `{}` when absent or malformed. `load_meta()` and `load_resolution()` are the two named readers over it. **A missing side file is never why the dashboard is down** — the page degrades to what the CSV can tell it
+- `format_window(start, end)` — an event's date window as `13 Aug 2026 – 23 Aug 2026`. `Dates TBD` when Liquipedia published none
+- `window_verdict(record)` — whether a pending league was its window's only candidate or won a contested one. A contested window is where the resolver *judged* rather than found the one league that fitted, so it is the row worth a second look
+- `upcoming_tab()` — the whole of tab 6. A report with no events is reported as **not knowing**, never as "no gaps"; the second is a claim, and a false one
 - `coverage_line(df, meta)` — builds the coverage caption. **Counts come from the CSV, never from `meta.json`**, so the line cannot advertise coverage the loaded page does not have; only `generated_at` and `excluded_count` are read from meta
 - `format_date()` — renders `5 Aug 2026`. Does not use `%-d`, which is not portable to Windows
 - `load_data()` is `@st.cache_data(ttl=1800)`; `build_team_perspective()` is `@st.cache_data` with no ttl
@@ -169,6 +179,8 @@ Pure functions only — plain data in, plain data out. No network, no filesystem
 - `apply_resolutions(ledger, resolutions)` — writes `tier1_event` onto winners, returns `(ledger, changes)`. **Never touches a verdict, and never clears a mapping** — a run that walked back a fortnight must not wipe the answers of one that walked back a year.
 - `events_awaiting_resolution(events, ledger, today, lookback_days=365)` — the events worth spending calls on: started, not already mapped, and inside the lookback. This is what decides how far back the shell walks, and dropping any of the three conditions is expensive.
 - `tier1_resolution_state(events, ledger, resolutions=None, previous=None)` — one record per event for `data/tier1_resolution.json`. **The mapping comes from the ledger, not from `resolutions`**, so an event resolved months ago does not regress to a gap on a run that never looked at it. `previous` is the last report's records and is what keeps a contested window's candidates alive: an event is examined exactly once, so without it the evidence would be blanked the day after it was recorded.
+- `coverage_gaps(records, today)` / `awaiting_verdict(records)` — the two lists the Upcoming tab renders, read back out of the report the resolver wrote. `coverage_gaps` marks each gap `GAP_UPCOMING` or `GAP_OVERDUE` against the event's own start date, **inclusive** — matches are played on day one — and sorts overdue first, then soonest. `awaiting_verdict` reads its match count and overlap from the **winning candidate's own row**: `candidates` is ranked, not keyed, so the first entry is the winner only by coincidence.
+- `SETTLED_VERDICTS` — `active` or `rejected`, and shared by `resolution_problems` and `awaiting_verdict` rather than restated in each. The queue printed in the run's `ATTENTION` lines and the queue shown on the dashboard are the same queue, and a misspelled verdict is on the awaiting side of the line in both: it fails the way a rejection does, so it must be raised rather than treated as decided.
 - `resolution_problems(ledger, resolutions)` / `resolution_report(records, generated_at)` — the `ATTENTION` lines and the file. A resolved league nobody has judged is the whole feature in one line. Two things are deliberately silent: a **`rejected`** league, because "never proposed again" is what a verdict is for, and a **gap**, because an unstarted tournament printed as a fault every run is how a real one stops being read. A league claimed by two events *is* reported — `apply_resolutions` keys by league id, so the second claim would quietly evict the first.
 
 ## Data Pipeline (opendota_pipeline.py)
