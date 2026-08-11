@@ -152,6 +152,62 @@ def flatten_objectives(objectives):
     return result
 
 
+# ── Retrying a failed call ────────────────────────────────────────────────────
+#
+# Whether a call is worth making again is a property of how it failed, and that
+# is arithmetic over a status code — so it lives here, beside the other policies,
+# rather than being spelled out inside the fetch loop. The shell does the asking,
+# the sleeping and the giving up; `retry_pause` decides all three.
+#
+# Two schedules, because two failures. A **429** is the free tier saying the
+# minute's allowance is spent, and the minute has to pass: waiting two seconds
+# only spends the retry on another refusal. A **timeout, a dropped connection or
+# a 5xx** is nothing of the sort — the next call usually works, and sitting out
+# the rate-limit schedule for each of them would spend three and a half minutes
+# per call on a network that is simply down, times a run of thousands of calls.
+
+RATE_LIMIT_STATUS = 429
+
+# The statuses that mean "the server, not the request". Everything else — 404,
+# 400, 403 — is an answer, and asking again gets the same one.
+TRANSIENT_STATUSES = frozenset({500, 502, 503, 504})
+
+# Long enough for the rate limit's window to move; four attempts over three and
+# a half minutes, which is a caller that has genuinely failed.
+RATE_LIMIT_BACKOFFS = (30.0, 60.0, 120.0)
+
+# Short, because nothing has been refused: a blip, a reset, a slow gateway.
+TRANSIENT_BACKOFFS = (2.0, 5.0, 15.0)
+
+
+def retry_pause(status, attempt):
+    """
+    How long to wait before asking again, or None when the caller should stop.
+
+    `status` is the HTTP status code, or **None for a request that never got
+    one** — a timeout, a dropped connection, a DNS failure. Those are transient
+    by definition: there is no response to read a verdict out of, and something
+    below the application answered.
+
+    `attempt` counts the failures so far, so `0` is "the first call failed".
+    Every schedule ends, which is the point: an unattended run must fail a call
+    and carry on rather than hold the whole schedule open against a dead
+    endpoint. A run that misses a match fetches it next time; a run that never
+    finishes fetches nothing ever again.
+    """
+    if status == RATE_LIMIT_STATUS:
+        backoffs = RATE_LIMIT_BACKOFFS
+    elif status is None or status in TRANSIENT_STATUSES:
+        backoffs = TRANSIENT_BACKOFFS
+    else:
+        # A 404 will still be a 404 in two minutes. So will a 200 — this is
+        # only ever asked about a call that did not give the caller what it
+        # wanted, and "ask again" is the wrong answer for both.
+        return None
+
+    return backoffs[attempt] if attempt < len(backoffs) else None
+
+
 # ── Suspect matches ───────────────────────────────────────────────────────────
 #
 # OpenDota answers a match request as soon as the match ends, whether or not it
@@ -1806,3 +1862,231 @@ def awaiting_verdict(records):
     return sorted(
         awaiting, key=lambda record: record["start_date"] or "", reverse=True,
     )
+
+
+# %%
+# # What a run says it did
+#
+# The scheduled job's only record of a pipeline run was the last line of its
+# stdout, which is a column name: every entry for two months read `Pipeline:
+# first_blood_time_mins` (ADR-0004). A quiet run, a run that fetched a whole
+# tournament and a run whose every league was unreachable all logged the same
+# thing, so the log answered no question anybody would ask it.
+#
+# A run therefore keeps one record per league and folds them into two things: a
+# table, printed at the end of the run, and a single prefixed line, which is
+# what the scheduled job copies into the log. Both are built here, from
+# counters, so that what a run *says* is asserted in the test suite rather than
+# read off a terminal afterwards.
+
+# The marker `auto_update.py` finds the summary line by. It greps rather than
+# taking the last line, because the last line of a successful run belongs to
+# whatever happened to print last.
+RUN_SUMMARY_PREFIX = "RUN SUMMARY: "
+
+
+def read_run_summary(output):
+    """
+    Picks the summary line out of a finished run's stdout, or answers None when
+    there is none — which means the run did not reach the end of `main()`.
+
+    The last matching line wins, so a run whose output happens to quote an
+    earlier one still reports its own. This is the read side of the contract
+    `RUN_SUMMARY_PREFIX` defines, kept next to the write side rather than as a
+    regular expression in the scheduled job: the two must move together.
+    """
+    for line in reversed((output or "").splitlines()):
+        if line.strip().startswith(RUN_SUMMARY_PREFIX):
+            return line.strip()
+
+    return None
+
+
+def league_run_record(league_id, name):
+    """
+    A league's line of the run, before anything has happened to it.
+
+    Every counter starts at zero and `list_failed` at False, which is the
+    difference this record exists to keep: a league with no new matches and a
+    league that could not be reached both end the run having fetched nothing.
+    """
+    return {
+        "league_id"  : league_id,
+        "name"       : name,
+        # How many match ids the league's list held, and how many of those were
+        # already in the checkpoint.
+        "available"  : 0,
+        "skipped"    : 0,
+        # The three verdicts of `classify_fetch`, tallied per league.
+        "complete"   : 0,
+        "held"       : 0,
+        "unparsed"   : 0,
+        # Matches whose detail call failed after its retries. They stay out of
+        # the checkpoint, so the next run fetches them.
+        "failed"     : 0,
+        # The league's match-id list could not be fetched at all. Not a count:
+        # nothing is known about this league this run, including how many
+        # matches it has.
+        "list_failed": False,
+    }
+
+
+def matches_fetched(record):
+    """
+    How many matches a league gave up this run: the three verdicts together.
+
+    Held and unparsed matches *were* fetched — they cost a call and they are in
+    the store. What differs is whether they will be fetched again.
+    """
+    return (record.get(FETCH_COMPLETE, 0) + record.get(FETCH_HELD, 0)
+            + record.get(FETCH_UNPARSED, 0))
+
+
+def summarise_run(records):
+    """
+    Folds the per-league records into the run's totals.
+
+    The failed leagues are carried by **name**, not just counted. "One league
+    list failed" in a log nobody was watching is a question, not an answer, and
+    the answer is which tournament stopped being covered.
+    """
+    totals = {
+        "leagues"       : len(records),
+        "failed_leagues": [record.get("name") for record in records
+                           if record.get("list_failed")],
+    }
+
+    for key in ("available", "skipped", FETCH_COMPLETE, FETCH_HELD,
+                FETCH_UNPARSED, "failed"):
+        totals[key] = sum(record.get(key, 0) for record in records)
+
+    totals["leagues_failed"] = len(totals["failed_leagues"])
+    totals["fetched"]        = sum(matches_fetched(record) for record in records)
+
+    return totals
+
+
+def _plural(count, singular, plural=None):
+    """`1 league`, `2 leagues` — and `2 league lists` for a two-word noun."""
+    return f"{count} {singular if count == 1 else (plural or singular + 's')}"
+
+
+# How many failed leagues the summary names before it stops listing them. The
+# line goes in a log; naming fifteen would bury the counts it is there for.
+RUN_SUMMARY_MAX_NAMES = 3
+
+
+def _named(names):
+    """`(Slam IV, DreamLeague S29 and 2 more)` — or nothing, for no names."""
+    known = [name for name in names if name]
+    if not known:
+        return ""
+
+    shown     = known[:RUN_SUMMARY_MAX_NAMES]
+    remaining = len(known) - len(shown)
+
+    if remaining:
+        shown.append(f"{remaining} more")
+
+    return " (" + ", ".join(shown) + ")"
+
+
+def format_run_summary(totals):
+    """
+    The one line the scheduled job records, and the whole account of a run for
+    anyone reading the log rather than the terminal.
+
+    It always states the failures, including when there are none. "No new
+    matches" is the normal state of a six-hourly job and must not read like a
+    run that fell over — which is the distinction the old log line could not
+    make, since it made no distinctions at all.
+
+    A failed league is **named**. The per-league table says which one too, but
+    the table is on stdout and this line is what reaches the log — and "which
+    tournament stopped being covered" is the question the whole feature exists
+    to answer within the day rather than within two months.
+    """
+    failures = []
+    if totals.get("leagues_failed"):
+        failures.append(_plural(totals["leagues_failed"], "league list") + " failed"
+                        + _named(totals.get("failed_leagues") or []))
+    if totals.get("failed"):
+        failures.append(
+            _plural(totals["failed"], "match fetch", "match fetches") + " failed"
+        )
+
+    return (
+        f"{RUN_SUMMARY_PREFIX}"
+        f"{_plural(totals.get('fetched', 0), 'match', 'matches')} fetched "
+        f"({totals.get('complete', 0)} complete, {totals.get('held', 0)} held, "
+        f"{totals.get('unparsed', 0)} unparsed) across "
+        f"{_plural(totals.get('leagues', 0), 'league')}, "
+        # "already fetched", never "already held": a *held* match is one
+        # deliberately left out of the checkpoint for re-fetching, and it is
+        # counted three words earlier in this same line.
+        f"{totals.get('skipped', 0)} already fetched; "
+        + (" and ".join(failures) if failures else "no failures")
+    )
+
+
+# The league column is wide because the label carries the id as well as the
+# name, and a truncated tournament name is the one thing here nobody can look up.
+_RUN_REPORT_LABEL = 40
+
+# The numeric columns, as (heading, width). The headings are the record's own
+# vocabulary rather than shorter synonyms of it: a column called `had` reading
+# as *skipped* is one glossary too many for a table read at six in the morning.
+# Every width is here, so the span a failure message fills is computed from them
+# rather than hand-summed into a constant that stops matching on the first edit.
+_RUN_REPORT_COLUMNS = (
+    ("listed", 8), ("skipped", 9), ("fetched", 9),
+    ("held", 6), ("unparsed", 10), ("failed", 8),
+)
+
+
+def format_run_report(records):
+    """
+    The per-league account printed at the end of a run: what each league listed,
+    what was fetched from it, and whether it could be reached at all.
+
+    `listed` is `skipped + fetched + failed`, so a row that does not add up is
+    itself worth seeing — every match a league lists is accounted for somewhere.
+
+    A league whose match-id list failed is reported as failed rather than as
+    zero. The two look identical in a counter and mean opposite things — one is
+    a tournament that has not started, the other is a tournament this project
+    has silently stopped covering, which is exactly how the Esports World Cup
+    went missing for two months.
+    """
+    if not records:
+        return "  No leagues were fetched."
+
+    span   = sum(width for _, width in _RUN_REPORT_COLUMNS)
+    header = f"  {'league':<{_RUN_REPORT_LABEL}}" + "".join(
+        f"{heading:>{width}}" for heading, width in _RUN_REPORT_COLUMNS
+    )
+    lines  = [header, "  " + "-" * (len(header) - 2)]
+
+    for record in records:
+        label = f"{record.get('name')} ({record.get('league_id')})"
+        label = label[:_RUN_REPORT_LABEL - 1]
+
+        if record.get("list_failed"):
+            lines.append(f"  {label:<{_RUN_REPORT_LABEL}}"
+                         f"{'match list fetch failed':>{span}}")
+            continue
+
+        counts = {
+            "listed" : record.get("available", 0),
+            "skipped": record.get("skipped", 0),
+            "fetched": matches_fetched(record),
+            "held"   : record.get(FETCH_HELD, 0),
+            "unparsed": record.get(FETCH_UNPARSED, 0),
+            "failed" : record.get("failed", 0),
+        }
+
+        lines.append(f"  {label:<{_RUN_REPORT_LABEL}}" + "".join(
+            f"{counts[heading]:>{width}}" for heading, width in _RUN_REPORT_COLUMNS
+        ))
+
+    return "\n".join(lines)

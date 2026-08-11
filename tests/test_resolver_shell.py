@@ -1,16 +1,16 @@
 """
-The resolver's shell: the pro match walk, what a rate limit does to it, and when
-the resolution file is rewritten.
+The resolver's shell: the pro match walk, and when the resolution file is
+rewritten.
 
-Most of the pipeline shell is verified by running it. These three are not
+Most of the pipeline shell is verified by running it. These two are not
 plumbing — each is a decision with a cost attached. A walk that stops too early
-misses a tournament; a 429 mistaken for a 404 threw away twelve confirmations on
-the first live run; and a resolution file rewritten every run puts a commit in
+misses a tournament, and a resolution file rewritten every run puts a commit in
 front of Wade every day saying nothing.
 
-How far back the walk goes is decided by `core.resolution_walk_start`, which is
-arithmetic over plain data and is tested in `test_resolver.py` with the rest of
-the core.
+What a rate limit does to the walk is `fetch_url`'s business, and is tested with
+the rest of the retry policy in `test_fetch_retry.py`. How far back the walk
+goes is decided by `core.resolution_walk_start`, which is arithmetic over plain
+data and is tested in `test_resolver.py` with the rest of the core.
 
 Nothing here touches the network. `fetch_url` is replaced with a stub and the
 resolution path points at pytest's `tmp_path`.
@@ -19,7 +19,6 @@ import json
 from datetime import datetime, timezone
 
 import pytest
-import requests
 
 import opendota_pipeline as pipeline
 
@@ -108,67 +107,6 @@ class TestWalkingBackThroughProMatches:
         opendota.pages = [[pro_match(300 - n, at("2026-08-09"))] for n in range(10)]
 
         assert len(pipeline.fetch_pro_matches(at("2020-01-01"))) == 3
-
-
-class TestBeingRateLimited:
-    """
-    A 429 is the one status that says "ask again". Treating it like a 404 throws
-    away whatever the call was fetching — which is what the resolver's first
-    real run did, twelve times in a row, after its pro match walk used up the
-    minute's allowance.
-    """
-
-    @pytest.fixture
-    def opendota(self, monkeypatch):
-        class Response:
-            def __init__(self, status_code):
-                self.status_code = status_code
-
-            def json(self):
-                return {"ok": True}
-
-        class Stub:
-            def __init__(self):
-                self.statuses = []
-                self.slept    = []
-
-            def get(self, url):
-                return Response(self.statuses.pop(0))
-
-        stub = Stub()
-        monkeypatch.setattr(requests, "get", stub.get)
-        monkeypatch.setattr(pipeline.time, "sleep", stub.slept.append)
-        return stub
-
-    def test_a_rate_limited_call_is_retried_and_succeeds(self, opendota):
-        opendota.statuses = [429, 200]
-
-        assert pipeline.fetch_url("/x", backoffs=(30.0,)) == {"ok": True}
-
-    def test_the_retry_waits_before_asking_again(self, opendota):
-        opendota.statuses = [429, 200]
-
-        pipeline.fetch_url("/x", backoffs=(30.0,))
-
-        assert 30.0 in opendota.slept
-
-    def test_the_backoffs_lengthen_and_then_give_up(self, opendota):
-        opendota.statuses = [429, 429, 429]
-
-        assert pipeline.fetch_url("/x", backoffs=(1.0, 2.0)) is None
-        assert [s for s in opendota.slept if s in (1.0, 2.0)] == [1.0, 2.0]
-
-    def test_any_other_bad_status_is_not_retried(self, opendota):
-        # A 404 will still be a 404 in two minutes. Only 429 says ask again.
-        opendota.statuses = [404]
-
-        assert pipeline.fetch_url("/x") is None
-
-    def test_the_delay_between_calls_sits_inside_sixty_a_minute_not_on_it(self):
-        # Exactly one second is the limit, not under it: the sleep starts after
-        # the response, so a run of fast responses puts slightly more than sixty
-        # calls inside a rolling minute.
-        assert pipeline.DELAY_SECONDS > 1.0
 
 
 class TestWritingTheResolution:

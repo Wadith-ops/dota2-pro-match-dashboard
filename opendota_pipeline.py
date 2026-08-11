@@ -15,19 +15,18 @@ import requests
 import time
 import json
 import os
-from collections import Counter
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 import pandas as pd
 
 import liquipedia
 from core import (
-    FETCH_COMPLETE,
     FETCH_HELD,
     FETCH_UNPARSED,
     LEDGER_ACTIVE,
     RESOLVER_GRACE_DAYS,
     SUSPECT_RETRY_DAYS,
+    UNKNOWN_PATCH,
     active_leagues,
     apply_resolutions,
     build_rows,
@@ -39,9 +38,12 @@ from core import (
     extract_standard,
     format_json_lines,
     format_ledger,
+    format_run_report,
+    format_run_summary,
     iter_json_array,
     known_team_ids,
     league_catalogue,
+    league_run_record,
     ledger_problems,
     merge_discovered_leagues,
     parse_standard_records,
@@ -49,8 +51,10 @@ from core import (
     resolution_report,
     resolution_walk_start,
     resolve_tier1_events,
+    retry_pause,
     seed_ledger,
     summarise_leagues,
+    summarise_run,
     suspect_reasons,
     tier1_resolution_state,
     verdict_counts,
@@ -98,14 +102,18 @@ BASE_URL = "https://api.opendota.com/api"
 # extra tenth is the difference between "at the limit" and "inside it".
 DELAY_SECONDS = 1.1
 
-# What to do when the limit is hit anyway. A 429 is not a 404 — the call will
-# succeed shortly, and treating it like a missing page throws away whatever it
-# was fetching. The resolver is what made this matter: its pro match walk is a
-# hundred-odd consecutive calls, and the first run of it was refused on every
-# request that followed. Backing off is deliberately dumb; making the whole
-# fetcher survive network failures is `tier1-pipeline-automation/12`.
-RATE_LIMIT_STATUS   = 429
-RATE_LIMIT_BACKOFFS = (30.0, 60.0, 120.0)
+# How long a single call may take before it is treated as a failed one. There is
+# no default: `requests` waits forever, and on a workstation that is a hung
+# terminal somebody eventually notices, while on a six-hourly runner it is a job
+# that never ends and a schedule that never runs again. Thirty seconds is
+# Liquipedia's timeout too — one number for the project, not one per client.
+REQUEST_TIMEOUT_SECONDS = 30.0
+
+# What to do when a call fails is `core.retry_pause`: which failures are worth
+# asking about again, how long to wait, and when to stop. It lives in the core
+# because it is a decision about a status code rather than an act of I/O, and
+# because the whole of it then fits in one tested function — the same shape as
+# `classify_fetch`, which holds the whole re-fetch policy.
 
 # The raw sink: a seam, disabled. Every match is fetched in full either way and
 # a Standard record is extracted from it; this decides only whether the full
@@ -296,54 +304,115 @@ def get_patch_map():
     """
     Fetches the official patch ID to version name mapping from OpenDota.
     Returns a dictionary like {58: "7.39", 59: "7.40", ...}
-    Falls back to empty dict if the call fails.
+    Falls back to an empty dict if the call fails.
+
+    Through `fetch_url` rather than around it: this was the one HTTP call in the
+    project with its own error handling, which meant its own missing timeout and
+    its own absent retry. Nothing about the patch constants makes them a
+    different kind of request.
+
+    A payload that is not a list counts as a failure, like the league list —
+    OpenDota answers 200 with an error object often enough. **So does an empty
+    one**, the same rule the league list follows and the opposite of the one
+    the match loop follows: a league legitimately has no matches before it
+    starts, and there is no such thing as a Dota patch list with nothing in it.
+
+    An empty map is survivable either way: `core.flatten_match` labels every
+    unmapped patch "Unknown", so a run without patch names is worse than one
+    with them and far better than no run at all.
     """
-    url = f"{BASE_URL}/constants/patch"
-    try:
-        response = requests.get(url)
-        if response.status_code == 200:
-            patches = response.json()
-            return {p["id"]: p["name"] for p in patches}
-        else:
-            print(f"  Could not fetch patch constants: {response.status_code}")
-            return {}
-    except Exception as e:
-        print(f"  Error fetching patch constants: {e}")
+    patches = fetch_url(f"{BASE_URL}/constants/patch")
+
+    if not isinstance(patches, list) or not patches:
+        print("  Could not fetch the patch constants — patch labels will read "
+              f"'{UNKNOWN_PATCH}' for anything new")
         return {}
+
+    patch_map = {patch["id"]: patch["name"] for patch in patches
+                 if "id" in patch and "name" in patch}
+
+    # Said out loud rather than silently returned short. A partial map labels
+    # real patches "Unknown", which reads on the dashboard as a data problem
+    # rather than as the fetch that caused it.
+    if len(patch_map) != len(patches):
+        print(f"  {len(patches) - len(patch_map)} patch constant(s) had no id or "
+              f"name and were skipped")
+
+    return patch_map
 
 # %%
 # # Step 2 - API Fetcher
 
-def fetch_url(url, backoffs=None):
+def fetch_url(url, retry_policy=None):
     """
-    Makes a GET request to the given URL.
+    Makes a GET request to the given URL, retrying what is worth retrying.
     Waits DELAY_SECONDS after every call to respect the rate limit.
-    Returns the response as a Python dictionary, or None if it failed.
+    Returns the parsed payload, or None if the call failed for good.
 
-    A 429 is retried after a pause rather than reported as a failure, because
-    it is the one status that says "ask again". Every other non-200 is answered
-    None, as before. Retries are exhausted quietly: a caller that has been
-    refused four times over three and a half minutes has genuinely failed.
+    Four kinds of failure, and only the shell can tell them apart at all:
+
+    - **No response.** A timeout, a dropped connection, a DNS failure. There is
+      no status to read a verdict out of, so the policy is asked about `None`
+      and answers with the transient schedule.
+    - **A status that is not 200.** Handed to the policy as it stands: a 429 or
+      a 5xx is asked again, a 404 is not.
+    - **A 200 that is not a payload.** A proxy's error page, most often. Not a
+      transport failure, so it is not retried — and not a payload either, so it
+      is answered None rather than raised out of a function every caller treats
+      as returning one or the other.
+    - **Anything else at all.** `requests` mostly wraps what it raises, but not
+      invariably, and **nothing** may reach the caller: one league's fetch
+      raising is one league's fetch ending the whole run. Unlike the three
+      above it is not retried — an error nobody anticipated is not evidence
+      that asking again will help.
+
+    `attempt` counts failures on this call whatever their kind, so a call that
+    fails several ways shares one four-attempt budget. That is deliberate: the
+    property worth guaranteeing is that a single call cannot hold the run open,
+    not that each kind of failure gets its own allowance.
+
+    `retry_policy` is injected so a caller can be less patient than the default,
+    and it resolves at call time rather than as a default argument — the same
+    rule `fetch_pro_matches` follows, since a default argument binds once when
+    the function is defined.
     """
-    backoffs = RATE_LIMIT_BACKOFFS if backoffs is None else backoffs
+    policy  = retry_pause if retry_policy is None else retry_policy
+    attempt = 0
 
-    for pause in (*backoffs, None):
+    while True:
+        status = None
+
         try:
-            response = requests.get(url)
+            response = requests.get(url, timeout=REQUEST_TIMEOUT_SECONDS)
             time.sleep(DELAY_SECONDS)
-        except Exception as e:
-            print(f" Error fetching {url}: {e}")
+            status = response.status_code
+
+            if status == 200:
+                try:
+                    return response.json()
+                except ValueError as error:
+                    print(f"  Response to {url} was not JSON: {error}")
+                    return None
+
+            print(f"  Bad response {status} for URL: {url}")
+
+        except requests.RequestException as error:
+            # `status` is still None here, which is what tells the policy that
+            # nothing above the network answered at all.
+            print(f"  Error fetching {url}: {error}")
+
+        except Exception as error:
+            print(f"  Unexpected error fetching {url}: {error!r}")
             return None
 
-        if response.status_code == 200:
-            return response.json()
+        pause = policy(status, attempt)
 
-        if response.status_code != RATE_LIMIT_STATUS or pause is None:
-            print(f" Bad response {response.status_code} for URL: {url}")
+        if pause is None:
             return None
 
-        print(f" Rate limited — waiting {pause:.0f}s before retrying {url}")
+        print(f"  Retrying {url} in {pause:.0f}s")
         time.sleep(pause)
+        attempt += 1
 
 # %%
 # # Step 2b - The league ledger
@@ -862,6 +931,16 @@ def run_pipeline(leagues):
     `leagues` is `{league_id: name}` — the name is the ledger's and is written
     onto every match row, so it is passed in rather than read back from the API
     per league.
+
+    Returns one record per league — what it had, what was fetched from it, and
+    whether it could be reached at all. That is what the run reports and what
+    the scheduled job logs; see `core.league_run_record`.
+
+    **No single league can end the run.** A match-id list that fails is recorded
+    as failed and the loop moves to the next league, because the alternative is
+    one unreachable tournament costing every other tournament's matches. The
+    same goes for a match: it stays out of the checkpoint, so the next run
+    fetches it.
     """
     print("=" * 60)
     print("Starting pipeline...")
@@ -870,7 +949,7 @@ def run_pipeline(leagues):
     if not leagues:
         print("The ledger marks no league active — nothing to fetch.")
         print("=" * 60)
-        return
+        return []
 
     # Load checkpoints. The stores themselves are never loaded: they are
     # appended to, and nothing in this loop needs to know what is already in
@@ -882,7 +961,7 @@ def run_pipeline(leagues):
     # on where inside a run's few minutes a given match is classified.
     now = datetime.now(timezone.utc)
 
-    tally   = Counter()
+    records = []
     pending = []
 
     def flush():
@@ -905,6 +984,9 @@ def run_pipeline(leagues):
     # Loop over active leagues
     for league_id, league_name in leagues.items():
 
+        record = league_run_record(league_id, league_name)
+        records.append(record)
+
         print(f"Processing league: {league_name} ({league_id})")
 
         # Step 3a — always fetch match ID list to catch new matches
@@ -916,7 +998,13 @@ def run_pipeline(leagues):
         # announced-but-not-yet-started league returns []. Testing truthiness
         # would report that empty list as a failed fetch.
         if data is None:
-            print(f"  Failed to fetch match IDs for league {league_id}")
+            # Recorded, not merely printed. Nothing is known about this league
+            # this run — not even how many matches it has — and a league that
+            # keeps failing has to be visible as more than one line lost in a
+            # thousand.
+            record["list_failed"] = True
+            print(f"  Failed to fetch match IDs for league {league_id} — "
+                  f"carrying on with the next league")
             print()
             continue
 
@@ -925,6 +1013,9 @@ def run_pipeline(leagues):
         # Anything not in the checkpoint: matches never seen, and matches held
         # back by an earlier run because their replay was not parsed yet.
         new_ids = [mid for mid in match_ids if mid not in fetched_matches]
+
+        record["available"] = len(match_ids)
+        record["skipped"]   = len(match_ids) - len(new_ids)
 
         print(f"  Found {len(match_ids)} total, {len(new_ids)} to fetch")
 
@@ -938,17 +1029,31 @@ def run_pipeline(leagues):
 
         for match_id in new_ids:
 
+            # Checked here, not read back out of the return value. A match id
+            # can appear twice in one list, and `get_match_detail` answers None
+            # both for a match it skipped and for one it could not fetch — so
+            # counting every None as a failure would report a duplicate id as a
+            # broken fetch, in the very line this run is judged by.
+            if match_id in fetched_matches:
+                record["skipped"] += 1
+                continue
+
             match_data = get_match_detail(match_id, fetched_matches)
 
             if match_data is None:
+                # Out of retries, and deliberately not checkpointed: the next
+                # run has no record of having fetched it and will ask again.
+                record["failed"] += 1
                 continue
 
             # Add league name for easy reference
             match_data["league_name"] = league_name
             pending.append(match_data)
 
-            # Update match checkpoint — unless the match is being held back
-            tally[checkpoint_or_hold(
+            # Update match checkpoint — unless the match is being held back.
+            # The three verdicts are the record's own count keys, so the tally
+            # is the verdict itself rather than a mapping that could drift.
+            record[checkpoint_or_hold(
                 match_data, fetched_matches, unparsed_matches, now
             )] += 1
             new_match_count += 1
@@ -964,11 +1069,16 @@ def run_pipeline(leagues):
 
     print("=" * 60)
     print("Pipeline complete.")
-    print(f"  Complete            : {tally[FETCH_COMPLETE]}")
-    print(f"  Held for re-fetch   : {tally[FETCH_HELD]}")
-    print(f"  Permanently unparsed: {tally[FETCH_UNPARSED]} "
-          f"(all time: {len(unparsed_matches)})")
+    print(format_run_report(records))
+    print()
+    # The one figure the table cannot hold: it is checkpoint state rather than
+    # anything that happened this run. Everything else is said by the report
+    # above and by the summary line `main()` ends with — restating it here in
+    # hand-formatted prose is how two accounts of one run come to disagree.
+    print(f"  Given up as unparsed, all time: {len(unparsed_matches)}")
     print("=" * 60)
+
+    return records
 
 # %%
 # # Step 5 - Flatten & Export to CSV
@@ -1048,6 +1158,12 @@ def main():
     the dataset, and this run may have just added some. It informs the next
     run rather than this one, which is the right way round: a league it has
     newly recognised still needs a verdict before anything is fetched from it.
+
+    The summary line is printed at the very end, after everything that could
+    fail has run. That is deliberate: `auto_update.py` records the line, so its
+    presence in the output means the run reached the end, and its absence means
+    it did not. A run that fetched nothing and a run that fell over are then two
+    different entries in the log rather than the same one.
     """
     ensure_directories()
 
@@ -1065,12 +1181,14 @@ def main():
     api_leagues = fetch_all_leagues()
     ledger      = load_ledger(api_leagues)
 
-    run_pipeline(active_leagues(ledger))
+    records  = run_pipeline(active_leagues(ledger))
     df, rows = build_dataframe(patch_map)
 
     resolve_tier1_leagues(
         ledger, api_leagues, known_team_ids(rows), datetime.now(timezone.utc)
     )
+
+    print(format_run_summary(summarise_run(records)))
 
     return df
 

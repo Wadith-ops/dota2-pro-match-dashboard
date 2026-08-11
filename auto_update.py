@@ -7,6 +7,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from core import read_run_summary
+
 HERE = Path(__file__).parent
 DASHBOARD = HERE / "dashboard.py"
 LOG_FILE = HERE / "update_log.txt"
@@ -32,12 +34,23 @@ def run(cmd, check=True):
 log("=== Auto update started ===")
 
 # Step 1 — run the pipeline
+#
+# The log records the run's own summary line, not the last line of stdout. That
+# is what it used to do, and the last line of a successful run is whatever
+# happened to print last — a column name, for two months (ADR-0004). The
+# summary is printed at the end of `main()`, so its absence here means the run
+# did not get that far, which is a different entry from a run that finished
+# having fetched nothing.
 log("Running pipeline...")
-result = run([PYTHON, str(HERE / "opendota_pipeline.py")])
-for line in reversed(result.stdout.strip().splitlines()):
-    if line.strip():
-        log(f"Pipeline: {line.strip()}")
-        break
+result  = run([PYTHON, str(HERE / "opendota_pipeline.py")])
+summary = read_run_summary(result.stdout)
+
+if summary:
+    log(f"Pipeline: {summary}")
+else:
+    tail = result.stdout.strip().splitlines()
+    log("Pipeline: FINISHED WITHOUT A SUMMARY — the run did not reach the end")
+    log(f"Pipeline: last output was {tail[-1].strip() if tail else '(no output)'}")
 
 # Step 2 — check whether anything actually changed
 # The ledger counts alongside the CSV: a run that fetched no matches but

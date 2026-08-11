@@ -149,6 +149,12 @@ The exclusion is from *figures*, not from the dataset: the match count, the cove
 
 **Retry window** — the five days a suspect match stays eligible for re-fetching, measured from the **match's own start time** rather than from when the pipeline first saw it. A backfilled event is therefore past its window on arrival, which is correct: its replays were parsed long ago or never.
 
+**Transient failure** — a call that failed in a way worth repeating: no response at all (a timeout, a dropped connection, a DNS failure), a 429, or a 5xx. Everything else — a 404, a 403 — is an *answer*, and asking again gets the same one. The two kinds back off differently: a 429 waits for the rate limit's minute to pass (30s, 60s, 120s), a transient failure waits seconds (2s, 5s, 15s). Both schedules end after four attempts, and the budget is **per call rather than per kind** — a call refused once and then timing out has three attempts left, not six. An unattended run must fail a call and carry on rather than hold the schedule open against a dead endpoint. See ADR-0011.
+
+**Run record** — one per league per run: how many matches the league had, how many were already fetched, how many came back complete, held or permanently unparsed, how many failed, and whether the match-id list could be read at all. A league that could not be reached is *failed*, not empty — the two look identical in a counter and mean opposite things.
+
+**Run summary** — the single line a run prints at the end, prefixed `RUN SUMMARY:`, stating what was fetched and what failed, **naming** the leagues that could not be reached. It is what the scheduled job records, and it is printed after everything that could fail, so its **absence** means the run did not reach the end. A quiet run and a broken run are different entries in the log; before this they were the same one.
+
 **Coverage** — what the dataset currently contains: generation timestamp, match count, tournament count, excluded count, and the date of the most recent match. Written to `data/meta.json` and shown on the dashboard, so a gap is visible at the point of use rather than discovered later.
 
 The **latest match date** is the load-bearing field. A run that fetches nothing still refreshes the generation timestamp, so generation time alone cannot reveal a gap — only the match date can. The dashboard shows both.
