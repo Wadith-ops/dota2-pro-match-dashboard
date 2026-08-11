@@ -78,19 +78,15 @@ These changes don't add new data — they reframe existing aggregates as **time 
 ---
 
 ## Phase 4: Pipeline Automation
-**Status: Deferred — manual update process chosen for now**
+**Status: unblocked — see `tier1-pipeline-automation/13`**
 
-### Chosen approach: Option A (manual local runs)
-Run the pipeline locally after tournaments, then commit and push the updated CSV:
-1. Run `opendota_pipeline.py` locally — fetches only new matches (checkpoint skips already-fetched IDs), appends to `matches.json`
-2. Run Step 5 (`build_dataframe`) — regenerates `matches_flat.csv`
-3. `git add data/matches_flat.csv` → commit → push → Streamlit Cloud redeploys automatically
+### What happens today (scheduled local runs)
+`auto_update.py` runs the pipeline and pushes if anything changed:
+1. `opendota_pipeline.py` — fetches only new matches (checkpoint skips already-fetched IDs), appending one **Standard record** per match to `data/matches_standard.jsonl`
+2. `build_dataframe()` — regenerates `matches_flat.csv` from that store
+3. `push_data.py` — commits the deployed data files and pushes; Streamlit Cloud redeploys automatically
 
-This works because `matches.json` and the checkpoint live locally and persist between runs.
+### Why it was deferred, and why that reason is gone
+The blocker was the 928 MB `data/matches.json`: a GitHub Actions runner starts without it, so the pipeline would have re-fetched the whole back catalogue every run. Options B (Git LFS) and C (cloud storage) were both ways to carry that file to CI.
 
-### Why full automation is deferred
-GitHub Actions runners start with no `matches.json` — the pipeline would need to re-fetch all 1,279+ matches from scratch on every run (~20 min, ~1,300 API calls). Solving this requires one of:
-- **Option B** — commit `matches.json` via Git LFS (file too large for standard git)
-- **Option C** — store `matches.json` in cloud storage (S3, Supabase etc.) and sync in CI
-
-Revisit when tournament cadence makes manual updates impractical.
+Neither is needed. The artifact split (ADR-0002, ADR-0010) made the serving path read a 37.5 MB committed store instead, and `tier1-pipeline-automation/11` deleted the raw file. A runner clones what it needs. Moving to GitHub Actions is now `13`, and its remaining prerequisite is `12` — surviving network failures — not storage.

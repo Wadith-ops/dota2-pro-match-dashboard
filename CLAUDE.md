@@ -36,7 +36,9 @@ Single-context — one `CONTEXT.md` plus `docs/adr/` at the repo root. See `docs
 
 **The serving and modelling paths are split** (`10`, 2026-08-11): every match is fetched whole, a **Standard record** is extracted from it — 20.1 KB against a raw 288 KB — and the flat CSV is built from that rather than from a raw store. `data/matches_standard.jsonl` is committed, appended to and never rewritten; `SAVE_RAW` is a disabled seam writing `data/matches_raw.jsonl`. The CSV rebuilt byte-identical across all 1,822 rows. See ADR-0010.
 
-What is still missing is the last mile: a resolved league that nobody has approved is an `ATTENTION` line in the run's output and a row on that tab, not yet a pull request. That is `15`. The 1 GB `data/matches.json` is still on Wade's workstation, already extracted and reconciled, waiting for the deliberate delete that is `11`. The rest of `.scratch/tier1-pipeline-automation/` rebuilds correctness and hosting. Read ADR-0001 through 0004 before touching the pipeline, ADR-0009 as well before touching the resolver, and ADR-0010 before touching either store.
+**The legacy raw store is gone** (`11`, 2026-08-11): `data/matches.json` was reconciled against the Standard store and deleted. The reconciliation was stronger than the count the ticket asked for — all 1,822 raw payloads re-extracted to records identical to the ones already stored, and the CSV then rebuilt byte-identical from the store with the file absent. It is re-fetchable from OpenDota in about half an hour and no cold archive is kept; `data/matches.json` stays in `.gitignore` so re-enabling `SAVE_RAW` can never make a raw store committable by accident.
+
+What is still missing is the last mile: a resolved league that nobody has approved is an `ATTENTION` line in the run's output and a row on that tab, not yet a pull request. That is `15`. The rest of `.scratch/tier1-pipeline-automation/` rebuilds correctness and hosting. Read ADR-0001 through 0004 before touching the pipeline, ADR-0009 as well before touching the resolver, and ADR-0010 before touching either store.
 
 ## File Structure
 
@@ -69,7 +71,6 @@ project/
 ├── data/
 │   ├── matches_standard.jsonl # the Standard store — committed, appended, 20 KB a match
 │   ├── matches_raw.jsonl     # raw sink — LOCAL ONLY, off unless SAVE_RAW=true
-│   ├── matches.json          # the retired 1 GB raw store — LOCAL ONLY, deleted by issue 11
 │   ├── leagues.json          # the league ledger — committed, edited in PRs
 │   ├── matches_flat.csv      # flattened data — committed, this is what deploys
 │   ├── meta.json             # coverage record — committed, read by the dashboard
@@ -94,7 +95,7 @@ python -m pytest              # full suite, offline, about two seconds
 
 Non-negotiable when writing any new analysis or chart:
 
-- **Never commit a raw payload store.** `data/matches_raw.jsonl` and the retired `data/matches.json` are both gitignored and must stay that way — the sink is disabled, not removed, and it may be re-enabled for modelling. `data/matches_standard.jsonl` is the one that *is* committed.
+- **Never commit a raw payload store.** `data/matches_raw.jsonl` and the deleted `data/matches.json` are both gitignored and must stay that way — the sink is disabled, not removed, and it may be re-enabled for modelling, at which point the entry is the only thing standing between a 288 KB-a-match file and the repository. `data/matches_standard.jsonl` is the one that *is* committed.
 - **The Standard store is appended to, never rewritten.** Adding a match must cost the size of that match. The shape this replaced rewrote the whole document every ten matches — 21 GB of disk writes to add 84 MB — and the cost was *total dataset × new matches*, so it degraded on every run. A whole-file rewrite of a store is the regression to watch for; use `append_text` for a log and `write_text_atomic` for a document. See ADR-0010.
 - **Every field the flat row is built from is on `core.STANDARD_MATCH_FIELDS`.** The CSV is built from Standard records, so a field missing from that allowlist reads downstream as missing from the API. `tests/test_standard.py::TestTheServingPathIsUnaffected` flattens each recorded fixture from both the payload and its extract and compares — that test is what holds it, and adding a column to the flat row without adding its source field there is what breaks it.
 - **Do not filter `first_blood_time_mins < 0`** — negative values are **valid pre-horn kills**, not artefacts. All 155 fall between −0.9 and −0.1 minutes. This reverses a previous rule; see ADR-0003.
@@ -225,7 +226,7 @@ The shell around the core: network, files, checkpoints. Still organised in `# %%
 
 **A document is written atomically; a store is appended to.** `write_text_atomic()` writes to `<path>.tmp` and renames over the original, so an interrupt leaves the previous version rather than half of two — the ledger is 10,050 hand-made verdicts rewritten daily, and a truncated checkpoint means re-fetching the whole dataset. `append_text()` writes whole lines and fsyncs, so the cost of adding a match is the size of that match. **`write_text_atomic` passes no `newline=` argument on purpose**: every file it writes is already committed with the platform's line endings, and pinning them would turn the next run's diff into a whole-file rewrite. `append_text` pins `\n`, because that file is appended to by whichever machine ran the pipeline and will one day be two of them.
 
-**`backfill_standard_store()` runs at the top of `main()` and is a no-op after the first time.** It streams the legacy 1 GB `data/matches.json` into the Standard store when there is a raw file and no store — without it, the first run after the split would rebuild the CSV from a store holding only that morning's matches. It **deletes nothing**: reconciling the store against the CSV and removing the raw file is `11`, and deliberately a human's decision.
+**`backfill_standard_store()` has already fired, and `data/matches.json` is gone (`11`).** It streamed the legacy 1 GB file into the Standard store when there was a raw file and no store, at the top of `main()`; both of its guards now hold permanently, so it is a no-op on every machine forever. It survives as the record of how the store was seeded and as the recovery path if that file is ever restored — it **deletes nothing**, and the delete it was waiting on was made by hand after reconciliation. Removing it is a tidy-up nobody has asked for; it costs one `os.path.exists` a run and six tests hold its behaviour.
 
 **The module does nothing when imported.** `main()` is the only entry point and only the `__main__` guard calls it, so `python opendota_pipeline.py` and `auto_update.py` work exactly as before while `import opendota_pipeline` costs nothing. Reintroducing module-level execution breaks `tests/test_pipeline_shell.py`.
 

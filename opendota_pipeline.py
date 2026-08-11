@@ -287,7 +287,8 @@ def backfill_standard_store():
     total += len(batch)
 
     print(f"  {total} Standard records written to {STANDARD_FILE}")
-    print(f"  {LEGACY_RAW_FILE} is untouched — deleting it is issue 11")
+    print(f"  {LEGACY_RAW_FILE} is untouched — reconcile it against the store "
+          "before deleting it by hand")
 
 
 # ── Fetch patch mapping from OpenDota constants ───────────────
