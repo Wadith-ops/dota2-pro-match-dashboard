@@ -24,9 +24,9 @@ from core import (
     classify_fetch,
     coverage_meta,
     flatten_match,
-    index_by_match_id,
+    format_json_lines,
+    parse_standard_records,
     retry_window_open,
-    store_match,
     suspect_reasons,
 )
 
@@ -298,42 +298,48 @@ class TestClassifyFetch:
 
 
 class TestStoringARefetch:
+    """
+    The store is appended to, so a re-fetched match is written twice. Collapsing
+    the two happens on the read side — see `tests/test_standard.py` for the rest
+    of `parse_standard_records`; what is here is the re-fetch path specifically.
+    """
+
+    def stored(self, *matches):
+        """The matches written to the store, in order, and read back."""
+        records, damaged = parse_standard_records(
+            format_json_lines(matches).splitlines()
+        )
+        assert damaged == 0
+        return records
+
     def test_a_new_match_is_appended(self):
-        matches = [match(match_id=1)]
-        positions = index_by_match_id(matches)
-
-        store_match(matches, positions, match(match_id=2))
-
-        assert [m["match_id"] for m in matches] == [1, 2]
-        assert positions == {1: 0, 2: 1}
+        assert [m["match_id"] for m in
+                self.stored(match(match_id=1), match(match_id=2))] == [1, 2]
 
     def test_a_refetched_match_replaces_its_earlier_payload(self):
         # The correction path end to end: the first fetch caught the match
         # before the replay was parsed, the second after. Two copies would
         # count the match twice in every average — the exact fault this issue
         # exists to remove, arriving through the re-fetch meant to fix it.
-        unparsed = match(match_id=1, objectives=None)
-        matches = [unparsed, match(match_id=2)]
-        positions = index_by_match_id(matches)
+        records = self.stored(
+            match(match_id=1, objectives=None),
+            match(match_id=2),
+            match(match_id=1, objectives=[TOWER]),
+        )
 
-        store_match(matches, positions, match(match_id=1, objectives=[TOWER]))
-
-        assert len(matches) == 2
-        assert matches[0]["objectives"] == [TOWER]
-        assert positions == {1: 0, 2: 1}
+        assert len(records) == 2
+        assert records[0]["objectives"] == [TOWER]
+        assert records[1]["match_id"] == 2
 
     def test_rows_built_after_a_refetch_hold_one_row_and_no_flag(self, patch_map):
-        matches = [match(match_id=1, objectives=None)]
-        positions = index_by_match_id(matches)
-
-        store_match(matches, positions, match(match_id=1, objectives=[TOWER]))
-        rows = build_rows(matches, patch_map)
+        rows = build_rows(
+            self.stored(match(match_id=1, objectives=None),
+                        match(match_id=1, objectives=[TOWER])),
+            patch_map,
+        )
 
         assert len(rows) == 1
         assert rows[0]["is_suspect"] is False
-
-    def test_a_payload_with_no_match_id_is_left_out_of_the_index(self):
-        assert index_by_match_id([{"duration": 100}, match(match_id=7)]) == {7: 1}
 
 
 class TestExcludedCount:

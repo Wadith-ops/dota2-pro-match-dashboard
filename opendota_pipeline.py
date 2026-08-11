@@ -36,18 +36,20 @@ from core import (
     coverage_meta,
     events_awaiting_resolution,
     events_in_year,
+    extract_standard,
+    format_json_lines,
     format_ledger,
-    index_by_match_id,
+    iter_json_array,
     known_team_ids,
     league_catalogue,
     ledger_problems,
     merge_discovered_leagues,
+    parse_standard_records,
     resolution_problems,
     resolution_report,
     resolution_walk_start,
     resolve_tier1_events,
     seed_ledger,
-    store_match,
     summarise_leagues,
     suspect_reasons,
     tier1_resolution_state,
@@ -68,7 +70,16 @@ _HERE = Path(__file__).parent
 DATA_DIR = str(_HERE / "data")
 CHECKPOINT_DIR = str(_HERE / "checkpoints")
 
-MATCHES_FILE = os.path.join(DATA_DIR, "matches.json")
+# The modelling store: one Standard record per match, appended, committed. This
+# is what the CSV is built from — the raw sink below is a seam, not a source.
+STANDARD_FILE = os.path.join(DATA_DIR, "matches_standard.jsonl")
+# The raw sink: full untouched payloads, written only when SAVE_RAW is on, and
+# gitignored because it is 288 KB a match. Nothing reads it.
+RAW_FILE = os.path.join(DATA_DIR, "matches_raw.jsonl")
+# The store both of those replace: a single 1 GB JSON array, rewritten in full
+# every ten matches. It is read once, to seed the Standard store, and is deleted
+# by hand afterwards — see `tier1-pipeline-automation/11`.
+LEGACY_RAW_FILE = os.path.join(DATA_DIR, "matches.json")
 LEDGER_FILE = os.path.join(DATA_DIR, "leagues.json")
 MATCH_CHECKPOINT = os.path.join(CHECKPOINT_DIR, "fetched_matches.json")
 # Matches given up on: suspect, out of retries, and never to be fetched again.
@@ -96,29 +107,18 @@ DELAY_SECONDS = 1.1
 RATE_LIMIT_STATUS   = 429
 RATE_LIMIT_BACKOFFS = (30.0, 60.0, 120.0)
 
-# Extracted Fields
-# Fields to always extract. Every field the flat row is built from has to be
-# here: with SAVE_RAW off, this list *is* the payload, and a field missing from
-# it reads downstream as missing from the API. Dropping the scores that way
-# would make every trimmed match look like a zero-kill game and flag the lot
-# as suspect.
-CORE_FIELDS = [
-    "match_id",
-    "duration",
-    "patch",
-    "radiant_win",
-    "radiant_score",
-    "dire_score",
-    "game_mode",
-    "start_time",
-    "radiant_team",
-    "dire_team",
-    "leagueid",
-    "objectives",
-]
+# The raw sink: a seam, disabled. Every match is fetched in full either way and
+# a Standard record is extracted from it; this decides only whether the full
+# payload is *also* kept on disk. It defaults off because 288 KB a match cannot
+# live in the repository or on a CI runner, and it stays here because starting
+# full-fidelity capture for modelling must be a configuration change rather than
+# a rewrite. Set SAVE_RAW=true to turn it back on. See ADR-0002.
+SAVE_RAW = os.getenv("SAVE_RAW", "false").lower() == "true"
 
-# Set this to True to save the full raw response instead (override with env var SAVE_RAW=false)
-SAVE_RAW = os.getenv("SAVE_RAW", "true").lower() == "true"
+# How many matches are buffered before the stores are appended to. An append is
+# cheap, but one write per match is one fsync per match, and the backfill does
+# 1,822 of them in a row.
+STORE_BATCH = 25
 
 
 def ensure_directories():
@@ -128,6 +128,166 @@ def ensure_directories():
     """
     os.makedirs(DATA_DIR, exist_ok=True)
     os.makedirs(CHECKPOINT_DIR, exist_ok=True)
+
+
+# %%
+# # Step 1b - Writing files
+#
+# Two shapes, and which one a file gets is decided by whether it is a log or a
+# document. A **document** — the ledger, the coverage record, a checkpoint — has
+# to be rewritten whole, so it is written to a neighbouring temporary file and
+# renamed over the original: `os.replace` is atomic, so an interrupt leaves the
+# previous version intact rather than half of two. A **log** — the Standard
+# store, the raw sink — is only ever appended to, so it is opened in append mode
+# and never rewritten at all.
+
+def write_text_atomic(path, text):
+    """
+    Replaces a file's contents, or leaves the file exactly as it was.
+
+    A plain `open(path, "w")` truncates before it writes, so an interrupt
+    anywhere in between leaves a file that parses as nothing. That is the window
+    the ledger sat in: ten thousand hand-made verdicts, rewritten daily, one
+    interrupted write from being unreadable.
+    """
+    temporary = f"{path}.tmp"
+
+    # No `newline=` argument, deliberately: every file this writes is already
+    # committed with the platform's line endings, and pinning them here would
+    # turn the next run's diff into a whole-file rewrite of all 10,050 lines.
+    with open(temporary, "w", encoding="utf-8") as f:
+        f.write(text)
+        f.flush()
+        os.fsync(f.fileno())
+
+    os.replace(temporary, path)
+
+
+def append_text(path, text):
+    """
+    Appends to a file, and returns once the bytes are on the disk rather than in
+    the operating system's cache.
+
+    Nothing is read, nothing is rewritten and nothing is held in memory: the
+    cost of adding a match is the size of that match, not the size of the store.
+    Whole lines are written in one call, so an interrupt can damage at most the
+    line being written — which `core.parse_standard_records` reports and skips.
+    """
+    if not text:
+        return
+
+    # `newline="\n"` here, and not on `write_text_atomic`: this file is appended
+    # to by whichever machine ran the pipeline, and once that is a Linux runner
+    # as well as this one, the platform default would leave one store with two
+    # kinds of line ending in it.
+    with open(path, "a", encoding="utf-8", newline="\n") as f:
+        f.write(text)
+        f.flush()
+        os.fsync(f.fileno())
+
+
+# %%
+# # Step 1c - The Standard store
+
+def read_standard_store():
+    """
+    Every Standard record held, in the order the matches were first fetched.
+
+    Read line by line rather than whole: the store is the biggest thing in the
+    repository and there is no reason for two copies of it to exist at once.
+    """
+    if not os.path.exists(STANDARD_FILE):
+        return []
+
+    with open(STANDARD_FILE, "r", encoding="utf-8") as f:
+        records, damaged = parse_standard_records(f)
+
+    if damaged:
+        # Recoverable, and worth saying out loud: the match those lines held is
+        # missing from the CSV until it is fetched again.
+        print(f"  {damaged} unreadable line(s) in {STANDARD_FILE} — skipped")
+
+    return records
+
+
+def append_standard(matches):
+    """
+    Extracts a Standard record from each raw payload and appends it.
+
+    A match fetched twice — every suspect match is, for five days — is appended
+    twice, and the second line wins when the store is read. That is the same
+    rule the in-memory upsert enforced, moved to the read side, which is what
+    lets the write side stay an append.
+    """
+    append_text(
+        STANDARD_FILE,
+        format_json_lines(extract_standard(match) for match in matches),
+    )
+
+
+def append_raw(matches):
+    """
+    Appends the untouched payloads to the raw sink, when the seam is open.
+
+    Deliberately the same line-per-match shape as the Standard store: the sink
+    is 14x the size, so the full-rewrite cost this replaces would come back 14x
+    worse the day it is switched on.
+    """
+    if not SAVE_RAW:
+        return
+
+    append_text(RAW_FILE, format_json_lines(matches))
+
+
+def backfill_standard_store():
+    """
+    Seeds the Standard store from the legacy 1 GB raw file, once.
+
+    Runs only when there is no store and that file is there — so it is a no-op
+    on every run after the first, and on any machine that never held the file.
+    Without it, the first run after the split would rebuild the CSV from a store
+    holding only the matches fetched that morning, which is the dashboard's
+    whole dataset gone.
+
+    The file is streamed, one match at a time. `json.load` on it needs the
+    document and its parsed form in memory together, which is why it could never
+    be processed anywhere but on the machine that wrote it.
+
+    Nothing is deleted here. Reconciling the store against the CSV and removing
+    the raw file is `tier1-pipeline-automation/11`, and it is deliberately a
+    human's decision.
+    """
+    if os.path.exists(STANDARD_FILE) or not os.path.exists(LEGACY_RAW_FILE):
+        return
+
+    size_gb = os.path.getsize(LEGACY_RAW_FILE) / 1e9
+    print(f"Seeding {STANDARD_FILE} from {LEGACY_RAW_FILE} ({size_gb:.2f} GB)...")
+
+    batch = []
+    total = 0
+
+    def chunks(handle):
+        while True:
+            chunk = handle.read(1 << 22)
+            if not chunk:
+                return
+            yield chunk
+
+    with open(LEGACY_RAW_FILE, "r", encoding="utf-8") as f:
+        for match in iter_json_array(chunks(f)):
+            batch.append(match)
+
+            if len(batch) >= STORE_BATCH:
+                append_standard(batch)
+                total += len(batch)
+                batch = []
+                print(f"  {total} matches extracted...")
+
+    append_standard(batch)
+    total += len(batch)
+
+    print(f"  {total} Standard records written to {STANDARD_FILE}")
+    print(f"  {LEGACY_RAW_FILE} is untouched — deleting it is issue 11")
 
 
 # ── Fetch patch mapping from OpenDota constants ───────────────
@@ -212,9 +372,15 @@ def read_ledger():
 
 
 def write_ledger(ledger):
-    """Writes the ledger, one league per line, ready to review in a diff."""
-    with open(LEDGER_FILE, "w", encoding="utf-8") as f:
-        f.write(format_ledger(ledger))
+    """
+    Writes the ledger, one league per line, ready to review in a diff.
+
+    Atomically, because it is 10,050 hand-reviewable verdicts rewritten daily
+    and a half-written one parses as no ledger at all — which `load_ledger`
+    correctly refuses to fetch or write against, but only after the file it
+    needed is already gone.
+    """
+    write_text_atomic(LEDGER_FILE, format_ledger(ledger))
 
 
 def fetch_all_leagues():
@@ -437,9 +603,10 @@ def write_resolution(records, generated_at, existing=None):
         print("  Tier 1 resolution unchanged")
         return existing
 
-    with open(RESOLUTION_FILE, "w", encoding="utf-8") as f:
-        json.dump(report, f, indent=2, ensure_ascii=False)
-        f.write("\n")
+    write_text_atomic(
+        RESOLUTION_FILE,
+        json.dumps(report, indent=2, ensure_ascii=False) + "\n",
+    )
 
     print(f"  Tier 1 resolution saved to {RESOLUTION_FILE}: "
           f"{report['event_count']} events, {report['gap_count']} gap(s), "
@@ -615,9 +782,11 @@ def load_checkpoint(filepath):
 def save_checkpoint(filepath, data):
     """
     Saves a set or list to a checkpoint file as JSON.
+
+    Atomically: a truncated checkpoint reads as an empty one, and an empty
+    checkpoint means re-fetching every match in the dataset.
     """
-    with open(filepath, "w") as f:
-        json.dump(list(data), f)
+    write_text_atomic(filepath, json.dumps(list(data)))
 
 # %%
 # # Step 3b - Get Match Details
@@ -626,7 +795,13 @@ def get_match_detail(match_id, fetched_matches):
     """
     Fetches full details for a single match.
     Skips the API call if the match ID is already in the fetched_matches checkpoint.
-    Returns a dictionary of match data, or None if skipped/failed.
+    Returns the full payload, or None if skipped/failed.
+
+    The payload comes back whole whether or not the raw sink is open. What is
+    kept from it is `core.extract_standard`'s business, and trimming here as
+    well would put the decision in two places — which is how the scores once
+    came to be missing from the stored payload while the flat row still read
+    them.
     """
     if match_id in fetched_matches:
         print(f"  Skipping match {match_id} — already fetched")
@@ -641,32 +816,10 @@ def get_match_detail(match_id, fetched_matches):
         print(f"  Failed to fetch match {match_id}")
         return None
 
-    if SAVE_RAW:
-        return data
-    else:
-        return {field: data.get(field) for field in CORE_FIELDS}
+    return data
 
 # %%
 # # Step 4 - Main Loop + Save
-
-def load_existing_matches():
-    """
-    Loads existing matches from the matches file.
-    Returns an empty list if the file doesn't exist yet.
-    """
-    if os.path.exists(MATCHES_FILE):
-        with open(MATCHES_FILE, "r") as f:
-            return json.load(f)
-    return []
-
-
-def save_matches(matches):
-    """
-    Saves the full matches list to the matches file.
-    Overwrites the file each time with the full updated list.
-    """
-    with open(MATCHES_FILE, "w") as f:
-        json.dump(matches, f, indent=2)
 
 
 def checkpoint_or_hold(match_data, fetched_matches, unparsed_matches, now):
@@ -718,21 +871,34 @@ def run_pipeline(leagues):
         print("=" * 60)
         return
 
-    # Load checkpoints and existing data
+    # Load checkpoints. The stores themselves are never loaded: they are
+    # appended to, and nothing in this loop needs to know what is already in
+    # them — the checkpoint is what says which matches have been fetched.
     fetched_matches   = load_checkpoint(MATCH_CHECKPOINT)
     unparsed_matches  = load_checkpoint(UNPARSED_CHECKPOINT)
-    all_matches       = load_existing_matches()
-    positions         = index_by_match_id(all_matches)
 
     # One clock for the run. Retry windows are five days wide, so nothing turns
     # on where inside a run's few minutes a given match is classified.
     now = datetime.now(timezone.utc)
 
-    tally = Counter()
+    tally   = Counter()
+    pending = []
+
+    def flush():
+        """Appends what has been fetched since the last flush."""
+        # The stores first, then the checkpoint. A match checkpointed before it
+        # is stored is a match nothing will ever fetch again and nothing holds;
+        # the other order costs a duplicate line, which the store already
+        # resolves on read.
+        append_standard(pending)
+        append_raw(pending)
+        save_checkpoint(MATCH_CHECKPOINT, fetched_matches)
+        save_checkpoint(UNPARSED_CHECKPOINT, unparsed_matches)
+        pending.clear()
 
     print(f"Matches already fetched : {len(fetched_matches)}")
-    print(f"Matches in file         : {len(all_matches)}")
     print(f"Given up as unparsed    : {len(unparsed_matches)}")
+    print(f"Raw sink                : {'on' if SAVE_RAW else 'off'}")
     print()
 
     # Loop over active leagues
@@ -768,6 +934,7 @@ def run_pipeline(leagues):
 
         # Step 3b — fetch details for new matches only
         new_match_count = 0
+
         for match_id in new_ids:
 
             match_data = get_match_detail(match_id, fetched_matches)
@@ -777,9 +944,7 @@ def run_pipeline(leagues):
 
             # Add league name for easy reference
             match_data["league_name"] = league_name
-
-            # Store it, replacing the record of an earlier, unparsed fetch
-            store_match(all_matches, positions, match_data)
+            pending.append(match_data)
 
             # Update match checkpoint — unless the match is being held back
             tally[checkpoint_or_hold(
@@ -787,22 +952,17 @@ def run_pipeline(leagues):
             )] += 1
             new_match_count += 1
 
-            # Save every 10 matches
-            if new_match_count % 10 == 0:
-                save_matches(all_matches)
-                save_checkpoint(MATCH_CHECKPOINT, fetched_matches)
-                save_checkpoint(UNPARSED_CHECKPOINT, unparsed_matches)
-                print(f"  Checkpoint saved — {new_match_count} new matches so far")
+            if len(pending) >= STORE_BATCH:
+                flush()
+                print(f"  Stored — {new_match_count} new matches so far")
 
         # Save after each league completes
-        save_matches(all_matches)
-        save_checkpoint(MATCH_CHECKPOINT, fetched_matches)
-        save_checkpoint(UNPARSED_CHECKPOINT, unparsed_matches)
+        flush()
         print(f"  Done — {new_match_count} new matches fetched for {league_name}")
         print()
 
     print("=" * 60)
-    print(f"Pipeline complete. Total matches in file: {len(all_matches)}")
+    print("Pipeline complete.")
     print(f"  Complete            : {tally[FETCH_COMPLETE]}")
     print(f"  Held for re-fetch   : {tally[FETCH_HELD]}")
     print(f"  Permanently unparsed: {tally[FETCH_UNPARSED]} "
@@ -819,8 +979,7 @@ def write_meta(rows):
     """
     meta = coverage_meta(rows, datetime.now(timezone.utc))
 
-    with open(META_FILE, "w") as f:
-        json.dump(meta, f, indent=2)
+    write_text_atomic(META_FILE, json.dumps(meta, indent=2))
 
     print(f"Meta saved to {META_FILE}")
     for key, value in meta.items():
@@ -831,23 +990,24 @@ def write_meta(rows):
 
 def build_dataframe(patch_map):
     """
-    Loads matches.json, flattens every match, and returns `(DataFrame, rows)`.
-    Also saves to CSV.
+    Flattens every Standard record into a match row, exports the CSV, and
+    returns `(DataFrame, rows)`.
+
+    The serving path reads the **Standard store**, not the raw sink. That is the
+    whole point of the split: the sink is off by default, so anything that read
+    it would see a dataset that stops growing the day it is switched off.
+    Standard keeps every field the flat row is built from, which is what makes
+    the substitution invisible — see `core.STANDARD_MATCH_FIELDS`.
 
     The flat rows come back alongside the frame because the resolver's
     tiebreaker is bootstrapped from the teams already in the dataset, and those
     are plain ints in the rows where the frame has re-read them as floats
     alongside NaN. `core.known_team_ids` reads the rows.
     """
-    if not os.path.exists(MATCHES_FILE):
-        print("No matches file found — run the pipeline first")
-        return None, []
-
-    with open(MATCHES_FILE, "r") as f:
-        matches = json.load(f)
+    matches = read_standard_store()
 
     if not matches:
-        print("No matches found")
+        print(f"No Standard records in {STANDARD_FILE} — run the pipeline first")
         return None, []
 
     print(f"Flattening {len(matches)} matches...")
@@ -889,6 +1049,11 @@ def main():
     newly recognised still needs a verdict before anything is fetched from it.
     """
     ensure_directories()
+
+    # Before anything else, and a no-op after the first time: the CSV is built
+    # from the Standard store, so the store has to hold the back catalogue
+    # before a run can rebuild it.
+    backfill_standard_store()
 
     patch_map = get_patch_map()
     print(f"Patch map loaded: {patch_map}")

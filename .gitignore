@@ -1,4 +1,10 @@
+# The raw sink, in both the shape it had and the shape it has. Full payloads are
+# 288 KB a match and never belong in the repository — the sink is off by default
+# and these entries stay whatever it is set to. `data/matches.json` is the legacy
+# 1 GB store, read once to seed the Standard store and then deleted by hand.
 data/matches.json
+data/matches_raw.jsonl
+*.tmp
 checkpoints/
 .scratch/
 update_log.txt

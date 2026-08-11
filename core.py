@@ -338,41 +338,6 @@ def flatten_match(match, patch_map):
     return row
 
 
-def index_by_match_id(matches):
-    """
-    Where each match sits in a list of stored payloads.
-
-    The pipeline appends every match it fetches, and a match held back for
-    re-fetching is fetched more than once. Without this index the second copy
-    would be appended alongside the first and the match would be counted twice
-    in every average — the failure this whole issue exists to prevent, arriving
-    by the back door.
-    """
-    return {
-        match.get("match_id"): position
-        for position, match in enumerate(matches)
-        if match.get("match_id") is not None
-    }
-
-
-def store_match(matches, positions, match):
-    """
-    Stores a fetched match in place, replacing any payload already held for its
-    id, and keeps `positions` in step. Both arguments are updated.
-
-    The replacement is always the better record: the only match fetched twice is
-    one held back as unparsed, and the second fetch is the one with the replay.
-    """
-    match_id = match.get("match_id")
-    position = positions.get(match_id)
-
-    if position is None:
-        positions[match_id] = len(matches)
-        matches.append(match)
-    else:
-        matches[position] = match
-
-
 def build_rows(matches, patch_map):
     """
     Flattens every raw match into a match row. One row per match.
@@ -413,6 +378,284 @@ def coverage_meta(rows, generated_at):
         "excluded_count"   : sum(1 for row in rows if row.get("is_suspect")),
         "latest_match_date": latest,
     }
+
+
+# ── The Standard modelling record ─────────────────────────────────────────────
+#
+# One fetch, two artifacts. The serving artifact is the flat row above, which is
+# all the dashboard reads. The modelling artifact is the **Standard record**: the
+# same match with its per-player timeseries removed, 20.1 KB against a raw
+# 288 KB, committed so that the features a model would want are accumulating from
+# today rather than needing a full re-fetch later. See ADR-0002 and ADR-0010.
+#
+# Both lists below are **allowlists**, and that is the load-bearing choice. A
+# denylist would let a field OpenDota adds tomorrow into a store that is
+# committed to the repository and grows for ever; an allowlist costs a re-fetch
+# to widen, which the whole design already accepts.
+
+# Match-level fields kept whole. Everything the flat row is built from is here —
+# the Standard record is what `build_rows` reads once the raw sink is off, so a
+# field missing from this list reads downstream as missing from the API.
+STANDARD_MATCH_FIELDS = (
+    # ── Identity and scope ────────────────────────────────────
+    "match_id", "leagueid", "league_name", "league", "series_id", "series_type",
+    # ── The match as played ───────────────────────────────────
+    "start_time", "duration", "pre_game_duration", "patch", "game_mode",
+    "lobby_type", "human_players", "region", "cluster", "version",
+    # ── Outcome ───────────────────────────────────────────────
+    "radiant_win", "radiant_score", "dire_score", "throw", "loss",
+    "tower_status_radiant", "tower_status_dire",
+    "barracks_status_radiant", "barracks_status_dire",
+    # ── Teams ─────────────────────────────────────────────────
+    "radiant_team", "dire_team", "radiant_team_id", "dire_team_id",
+    "radiant_name", "dire_name", "radiant_captain", "dire_captain",
+    # ── The features ──────────────────────────────────────────
+    # `objectives` in full: it is what every figure on the dashboard is built
+    # from, and it is 1% of the payload. `radiant_gold_adv` and `radiant_xp_adv`
+    # are half a kilobyte each and the highest-value-per-byte features in the
+    # payload for outcome modelling — the specific reason Standard was chosen
+    # over a leaner tier that kept only final stats.
+    "objectives", "picks_bans", "draft_timings",
+    "radiant_gold_adv", "radiant_xp_adv",
+    "first_blood_time", "od_data",
+)
+
+# Per-player fields kept: the aggregates, the final item build, and the
+# benchmarks. What is dropped is everything shaped like a timeseries or a
+# matrix — `lane_pos`, `damage`, `damage_taken`, `purchase_log`, `gold_t`,
+# `xp_t`, `kills_log` and the rest — which is where 87% of a raw payload lives.
+STANDARD_PLAYER_FIELDS = (
+    # ── Who ───────────────────────────────────────────────────
+    "account_id", "player_slot", "isRadiant", "hero_id", "hero_variant",
+    "rank_tier", "leaver_status",
+    # ── Lane ──────────────────────────────────────────────────
+    "lane", "lane_role", "is_roaming", "lane_efficiency_pct",
+    # ── The line ──────────────────────────────────────────────
+    "kills", "deaths", "assists", "last_hits", "denies", "level",
+    "gold_per_min", "xp_per_min", "gold_spent", "net_worth",
+    "hero_damage", "tower_damage", "hero_healing",
+    "teamfight_participation", "stuns", "life_state_dead",
+    # ── What they killed ──────────────────────────────────────
+    "firstblood_claimed", "neutral_kills", "ancient_kills", "towers_killed",
+    "roshans_killed", "courier_kills", "observer_kills", "sentry_kills",
+    # ── Support work ──────────────────────────────────────────
+    "obs_placed", "sen_placed", "creeps_stacked", "camps_stacked",
+    "rune_pickups", "buyback_count",
+    # ── Final build ───────────────────────────────────────────
+    "item_0", "item_1", "item_2", "item_3", "item_4", "item_5",
+    "backpack_0", "backpack_1", "backpack_2", "item_neutral", "item_neutral2",
+    "aghanims_scepter", "aghanims_shard", "moonshard", "permanent_buffs",
+    # ── How that compares ─────────────────────────────────────
+    "benchmarks",
+)
+
+# A teamfight, summarised: when it started, when it ended, when the last hero
+# died in it, and how many died. The per-player breakdown OpenDota nests inside
+# each fight is dropped — it is a quarter of the whole record, and "teamfight
+# summaries" is what the record retains. See ADR-0010.
+STANDARD_TEAMFIGHT_FIELDS = ("start", "end", "last_death", "deaths")
+
+# Benchmark percentiles arrive as full-precision floats — 0.9521044992743106 for
+# a percentile — and 18 characters of a number nobody can use is 8% of the store.
+# Rounded, not dropped: the benchmarks themselves are an acceptance criterion.
+BENCHMARK_PRECISION = 4
+
+
+def _kept(source, fields):
+    """The allowlisted fields present in `source`, in allowlist order."""
+    return {field: source[field] for field in fields if field in source}
+
+
+def round_benchmarks(benchmarks):
+    """
+    A player's benchmarks with every float rounded to `BENCHMARK_PRECISION`.
+
+    Anything that is not a benchmark-shaped dict is returned untouched: this
+    runs over every player of every match ever fetched, and a payload shaped
+    differently from today's must survive extraction rather than end it.
+    """
+    if not isinstance(benchmarks, dict):
+        return benchmarks
+
+    rounded = {}
+
+    for metric, value in benchmarks.items():
+        if isinstance(value, dict):
+            rounded[metric] = {
+                key: round(number, BENCHMARK_PRECISION)
+                if isinstance(number, float) else number
+                for key, number in value.items()
+            }
+        else:
+            rounded[metric] = value
+
+    return rounded
+
+
+def extract_standard(match):
+    """
+    The Standard modelling record for one raw match payload.
+
+    Presence-based: a field the payload does not carry is left out rather than
+    written as null. An unparsed match has almost none of them, and a record
+    full of nulls would claim to know that they were empty.
+
+    **Idempotent.** Extracting an already-extracted record returns it unchanged,
+    which is what lets the same function serve the live pipeline and the one-off
+    backfill without either needing to know which it has been handed.
+    """
+    record = _kept(match, STANDARD_MATCH_FIELDS)
+
+    if isinstance(match.get("players"), list):
+        record["players"] = [
+            {
+                **_kept(player, STANDARD_PLAYER_FIELDS),
+                **({"benchmarks": round_benchmarks(player["benchmarks"])}
+                   if "benchmarks" in player else {}),
+            }
+            for player in match["players"] if isinstance(player, dict)
+        ]
+
+    if isinstance(match.get("teamfights"), list):
+        record["teamfights"] = [
+            _kept(fight, STANDARD_TEAMFIGHT_FIELDS)
+            for fight in match["teamfights"] if isinstance(fight, dict)
+        ]
+
+    return record
+
+
+# ── The Standard store ────────────────────────────────────────────────────────
+#
+# One record per line, appended. The store it replaces was a single JSON array
+# rewritten in full every ten matches — 21 GB of disk writes to add 84 MB during
+# one backfill, a cost that is *total dataset × new matches* and so degrades on
+# every run regardless of how few matches arrive. An append writes only the new
+# record, and nothing has to hold the store in memory to do it.
+#
+# The price of appending is that a match fetched twice is written twice, and a
+# suspect match is deliberately fetched again for five days. So the store is
+# read as a **last write wins** log, which is the same rule the old in-memory
+# upsert enforced: the second fetch is the one with the parsed replay.
+
+def format_json_lines(records):
+    """
+    Records as text ready to append: one compact JSON object per line.
+
+    Compact separators and no indentation, unlike the ledger — these files are
+    read by machines only, and `indent=2` on a store this size is 30% of it
+    spent on whitespace. Used for the Standard store and, when the seam is open,
+    for the raw sink; neither has any shape in common except being a log.
+    """
+    return "".join(
+        json.dumps(record, separators=(",", ":"), ensure_ascii=False) + "\n"
+        for record in records
+    )
+
+
+def parse_standard_records(lines):
+    """
+    Reads the store back as `(records, damaged)`.
+
+    One record per match id, **in first-seen order, holding the last line
+    written for it**. Order is first-seen so that re-fetching a match does not
+    move its row in the CSV; the value is the last so that a re-fetched match
+    replaces the unparsed payload it arrived with.
+
+    `damaged` counts lines that would not parse. An append is a single write of
+    one complete line, so the only way to produce one is a crash or a full disk
+    mid-write — rare, recoverable by re-fetching that match, and never a reason
+    to refuse to read the other ten thousand lines.
+    """
+    positions = {}
+    records   = []
+    damaged   = 0
+
+    for line in lines:
+        if not line.strip():
+            continue
+
+        try:
+            record = json.loads(line)
+        except ValueError:
+            damaged += 1
+            continue
+
+        if not isinstance(record, dict):
+            damaged += 1
+            continue
+
+        match_id = record.get("match_id")
+        position = positions.get(match_id) if match_id is not None else None
+
+        if position is None:
+            if match_id is not None:
+                positions[match_id] = len(records)
+            records.append(record)
+        else:
+            records[position] = record
+
+    return records, damaged
+
+
+def iter_json_array(chunks):
+    """
+    Yields the top-level objects of a JSON array arriving as a stream of text
+    chunks, without ever holding the whole document.
+
+    This is how the 1 GB raw store is read: `json.load` on it needs the entire
+    document and its parsed form in memory at once, which is the reason the file
+    could never be processed anywhere but on the machine that wrote it.
+
+    Only one buffered object is held at a time. Chunk boundaries fall wherever
+    the reader puts them — mid-number, mid-string, mid-object — so a partial
+    decode is not an error, it is a request for more input.
+    """
+    decoder = json.JSONDecoder()
+    buffer  = ""
+    opened  = False
+
+    for chunk in chunks:
+        buffer += chunk
+
+        while True:
+            buffer = buffer.lstrip()
+
+            if not opened:
+                if not buffer:
+                    break
+                if buffer[0] != "[":
+                    raise ValueError("not a JSON array")
+                buffer = buffer[1:]
+                opened = True
+                continue
+
+            # Whatever separates two objects, or ends the array. A comma cannot
+            # be assumed: `[]` has none, and the last object is followed by `]`.
+            if buffer[:1] == ",":
+                buffer = buffer[1:]
+                continue
+
+            if not buffer or buffer[0] == "]":
+                break
+
+            try:
+                value, end = decoder.raw_decode(buffer)
+            except ValueError:
+                # Not malformed — merely incomplete. Read more and try again.
+                break
+
+            remainder = buffer[end:].lstrip()
+
+            # A decode that consumed the whole buffer may have decoded a value
+            # the chunk cut in half — `1234` read as `12` — and there is no way
+            # to tell from here. The array's own `,` or `]` is the proof that a
+            # value ended, so nothing is yielded until one of them is in hand.
+            if not remainder:
+                break
+
+            buffer = remainder
+            yield value
 
 
 # ── The league ledger ─────────────────────────────────────────────────────────

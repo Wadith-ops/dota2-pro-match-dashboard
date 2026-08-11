@@ -127,9 +127,15 @@ Only the **rendered tournaments table** is authoritative. The same page carries 
 
 **Checkpoint** — `checkpoints/fetched_matches.json`, the set of match IDs already fetched. Match-level only: league match-ID lists are always re-fetched so new matches are detected. An id missing from it means "fetch this", which is why a suspect match inside its retry window is deliberately left out.
 
-**Raw match** — the full untouched API response, roughly 386 KB per match, of which `players` is 87% and `objectives` — the only part the dashboard reads — is 1.4%. Historically stored in `data/matches.json`; that store is being retired in favour of the Standard record, with the raw sink retained as a **disabled seam** so full-fidelity capture can be switched back on for modelling. Never committed.
+**Raw match** — the full untouched API response, averaging 288 KB per match, of which `players` is 89% and `objectives` — the only part the dashboard reads — is 1%.
 
-**Standard record** — the modelling artifact: roughly 20 KB per match, retaining objectives in full, picks and bans, per-player aggregates, teamfight summaries, benchmarks, and the gold and XP advantage curves, while discarding per-player timeseries. Committed and versioned. Nothing consumes it yet — it accumulates so that modelling does not require a full re-fetch later. See ADR-0002. (Lands in `tier1-pipeline-automation/10`.)
+**Raw sink** — `data/matches_raw.jsonl`, where raw matches are kept when `SAVE_RAW` is on. It is a **disabled seam**: off by default, retained so that full-fidelity capture for modelling is a configuration change rather than a rewrite. Never committed. The 1 GB `data/matches.json` is its retired predecessor, read once to seed the Standard store and then deleted.
+
+**Standard record** — the modelling artifact: **20.1 KB per match**, retaining objectives in full, picks and bans, per-player aggregates, teamfight summaries, benchmarks, and the gold and XP advantage curves, while discarding the per-player timeseries. What is kept is an *allowlist* — `core.STANDARD_MATCH_FIELDS` and its two companions — so a field OpenDota adds tomorrow cannot enlarge a committed file on its own. See ADR-0002 and ADR-0010.
+
+The Standard record is not only the modelling artifact: **the flat CSV is built from it**. Every field the flat row needs is on the match allowlist, which is what lets the raw sink be off without the serving path noticing.
+
+**Standard store** — `data/matches_standard.jsonl`, one Standard record per line, 37.5 MB for 1,822 matches, committed. **Appended to, never rewritten**, so adding a match costs the size of that match. A match fetched twice is written twice and the **last line for a match id wins** when the store is read, in first-seen order — which is how a re-fetched suspect match replaces the unparsed payload it arrived with without moving its row in the CSV.
 
 **Flat CSV** — `data/matches_flat.csv`, the flattened match-row export. This is the only data the deployed dashboard reads.
 

@@ -34,7 +34,9 @@ Single-context — one `CONTEXT.md` plus `docs/adr/` at the repo root. See `docs
 
 **Coverage state is on the dashboard** (`09`, 2026-08-11): a sixth tab reads `data/tier1_resolution.json` and shows the Tier 1 events with no league — marked Overdue once the event has started, which is the case that means something is broken — and the leagues awaiting a verdict, with the evidence that resolved them. It is read-only by design and carries the Liquipedia attribution whether or not either list has rows.
 
-What is still missing is the last mile: a resolved league that nobody has approved is an `ATTENTION` line in the run's output and a row on that tab, not yet a pull request. That is `15`. The rest of `.scratch/tier1-pipeline-automation/` rebuilds correctness and hosting. Read ADR-0001 through 0004 before touching the pipeline, and ADR-0009 as well before touching the resolver.
+**The serving and modelling paths are split** (`10`, 2026-08-11): every match is fetched whole, a **Standard record** is extracted from it — 20.1 KB against a raw 288 KB — and the flat CSV is built from that rather than from a raw store. `data/matches_standard.jsonl` is committed, appended to and never rewritten; `SAVE_RAW` is a disabled seam writing `data/matches_raw.jsonl`. The CSV rebuilt byte-identical across all 1,822 rows. See ADR-0010.
+
+What is still missing is the last mile: a resolved league that nobody has approved is an `ATTENTION` line in the run's output and a row on that tab, not yet a pull request. That is `15`. The 1 GB `data/matches.json` is still on Wade's workstation, already extracted and reconciled, waiting for the deliberate delete that is `11`. The rest of `.scratch/tier1-pipeline-automation/` rebuilds correctness and hosting. Read ADR-0001 through 0004 before touching the pipeline, ADR-0009 as well before touching the resolver, and ADR-0010 before touching either store.
 
 ## File Structure
 
@@ -65,7 +67,9 @@ project/
 │   ├── conftest.py           # fixture loaders + a patch_map fixture
 │   └── fixtures/             # gzipped raw OpenDota payloads, committed
 ├── data/
-│   ├── matches.json          # raw match data — LOCAL ONLY, do not commit
+│   ├── matches_standard.jsonl # the Standard store — committed, appended, 20 KB a match
+│   ├── matches_raw.jsonl     # raw sink — LOCAL ONLY, off unless SAVE_RAW=true
+│   ├── matches.json          # the retired 1 GB raw store — LOCAL ONLY, deleted by issue 11
 │   ├── leagues.json          # the league ledger — committed, edited in PRs
 │   ├── matches_flat.csv      # flattened data — committed, this is what deploys
 │   ├── meta.json             # coverage record — committed, read by the dashboard
@@ -90,7 +94,9 @@ python -m pytest              # full suite, offline, about two seconds
 
 Non-negotiable when writing any new analysis or chart:
 
-- **Never commit `data/matches.json`.** It is gitignored and must stay that way — including after the raw sink is disabled, since it may be re-enabled for modelling.
+- **Never commit a raw payload store.** `data/matches_raw.jsonl` and the retired `data/matches.json` are both gitignored and must stay that way — the sink is disabled, not removed, and it may be re-enabled for modelling. `data/matches_standard.jsonl` is the one that *is* committed.
+- **The Standard store is appended to, never rewritten.** Adding a match must cost the size of that match. The shape this replaced rewrote the whole document every ten matches — 21 GB of disk writes to add 84 MB — and the cost was *total dataset × new matches*, so it degraded on every run. A whole-file rewrite of a store is the regression to watch for; use `append_text` for a log and `write_text_atomic` for a document. See ADR-0010.
+- **Every field the flat row is built from is on `core.STANDARD_MATCH_FIELDS`.** The CSV is built from Standard records, so a field missing from that allowlist reads downstream as missing from the API. `tests/test_standard.py::TestTheServingPathIsUnaffected` flattens each recorded fixture from both the payload and its extract and compares — that test is what holds it, and adding a column to the flat row without adding its source field there is what breaks it.
 - **Do not filter `first_blood_time_mins < 0`** — negative values are **valid pre-horn kills**, not artefacts. All 155 fall between −0.9 and −0.1 minutes. This reverses a previous rule; see ADR-0003.
 - **Exclude `team_name.isin(["Radiant", "Dire"])`** from every team-level calculation. These are fallback names for anonymous teams, not real teams.
 - **Display patch via `patch_label`, never `patch`.** `patch_label` is a string written by the pipeline; `patch` is the same value re-inferred by `read_csv` as a float, which renders `7.4` instead of `7.40`. Read the CSV with `core.CSV_DTYPES` so the label stays a string, and never reformat it — the label is already the name the API gave, and numeric formatting throws on `"Unknown"`. Order labels with `core.patch_sort_key`, not `float()`.
@@ -159,7 +165,11 @@ Pure functions only — plain data in, plain data out. No network, no filesystem
 - `suspect_reasons(match, objective_counts=None)` — every reason this match's objective data cannot be trusted, as a tuple; empty means the numbers stand. Missing objectives short-circuit, since the zero towers *are* the missing array rather than separate evidence. Pass the counts when you already have them; the verdict is the same either way.
 - `retry_window_open(match, now)` — whether a suspect match is young enough to re-fetch. **The deadline hangs off the match's own `start_time`**, not off when the pipeline first saw it, which is what keeps it pure and what makes a backfilled event past its deadline on arrival.
 - `classify_fetch(match, now)` — what to do with a match just fetched: `FETCH_COMPLETE`, `FETCH_HELD` or `FETCH_UNPARSED`. The whole re-fetch policy is this one function, and it is tested here rather than in the shell that acts on it.
-- `index_by_match_id(matches)` / `store_match(matches, positions, match)` — upsert into the raw sink. A re-fetched match **replaces** its earlier payload; appending a second copy would count the match twice in every average.
+- `extract_standard(match)` — one raw payload to one Standard record, roughly 20 KB from 288 KB. **Idempotent**, so the same function serves the live pipeline and the one-off backfill. Presence-based: a field the payload does not carry is left out rather than nulled, since a record full of nulls would claim to know an unparsed match had no teamfights.
+- `STANDARD_MATCH_FIELDS` / `STANDARD_PLAYER_FIELDS` / `STANDARD_TEAMFIGHT_FIELDS` — **allowlists**, so a field OpenDota adds tomorrow cannot enlarge a committed file on its own. A teamfight keeps `start`, `end`, `last_death`, `deaths` and not the per-player breakdown, which is a quarter of the record. See ADR-0010.
+- `round_benchmarks(benchmarks)` — benchmark floats to `BENCHMARK_PRECISION`. Eighteen digits of a percentile is 8% of the store; rounded rather than dropped, because the benchmarks are an acceptance criterion.
+- `format_json_lines(records)` / `parse_standard_records(lines)` — the store as text, and back. **Last write wins, in first-seen order**: a re-fetched match replaces its unparsed payload without moving its row in the CSV, which is what the in-memory upsert used to do. `parse_standard_records` returns `(records, damaged)` and never refuses a file over one bad line.
+- `iter_json_array(chunks)` — top-level objects out of a JSON array arriving in chunks, one at a time. This is the only way the legacy 1 GB store can be read at all: `json.load` needs the document and its parsed form in memory together.
 - `patch_sort_key(label)` — orders patch labels by release, tolerating lettered names and `"Unknown"`. Used by the dashboard's patch filter.
 - `CSV_DTYPES` — the dtypes `read_csv` needs so the CSV round-trips: `patch_label` and `suspect_reason` as `str`. A blank `suspect_reason` still reads back as NaN — dtype cannot fix that, so `load_data()` fills it.
 - **Objective timings convert on `is not None`, never on truthiness.** A first blood at exactly `t=0` is a real event, and a pre-horn one is negative; both are lost by an `if raw_time` test.
@@ -187,11 +197,11 @@ Pure functions only — plain data in, plain data out. No network, no filesystem
 
 The shell around the core: network, files, checkpoints. Still organised in `# %%` cells:
 
-1. Config, paths, `get_patch_map()` and `ensure_directories()` — both **called from `main()`, never at import**
+1. Config, paths, `get_patch_map()` and `ensure_directories()` — both **called from `main()`, never at import**; **1b** the two file shapes — `write_text_atomic` / `append_text`; **1c** the Standard store — `read_standard_store` / `append_standard` / `append_raw` / `backfill_standard_store`
 2. Rate-limited fetcher (`fetch_url`), 1s delay, 60 calls/min free tier; **2b** the ledger — `read_ledger` / `write_ledger` / `fetch_all_leagues` / `load_ledger`; **2c** the resolver — `fetch_pro_matches` / `confirm_candidates` / `resolve_tier1_leagues` / `write_resolution`
-3. **3a** checkpoint load/save; **3b** match detail fetcher
-4. Main loop over the active leagues, match-level checkpoint only, upserts into `matches.json` via `core.store_match`
-5. `build_dataframe(patch_map)` reads the raw JSON, calls `core.build_rows`, exports `matches_flat.csv`, then writes `data/meta.json` via `write_meta()`. Returns **`(df, rows)`** — the resolver needs the rows, where team ids are still ints rather than the floats-beside-NaN the frame re-reads them as
+3. **3a** checkpoint load/save; **3b** match detail fetcher — the **full** payload either way, since what to keep is `core.extract_standard`'s business
+4. Main loop over the active leagues, match-level checkpoint only, appending a Standard record per match — and the raw payload too when the seam is open
+5. `build_dataframe(patch_map)` reads the **Standard store**, calls `core.build_rows`, exports `matches_flat.csv`, then writes `data/meta.json` via `write_meta()`. Returns **`(df, rows)`** — the resolver needs the rows, where team ids are still ints rather than the floats-beside-NaN the frame re-reads them as
 
 **`main()` fetches `/leagues` once and hands it to both callers.** `load_ledger(api_leagues)` takes it as a parameter, and `_FETCH_LEAGUES` is the sentinel that keeps "the caller passed nothing" apart from "the caller passed None because the fetch failed" — collapsing those would make a failed fetch trigger a second one, and a seeded ledger written over a real one.
 
@@ -213,11 +223,13 @@ The shell around the core: network, files, checkpoints. Still organised in `# %%
 
 **`checkpoint_or_hold()` acts on `core.classify_fetch` and is the re-fetch mechanism.** A suspect match inside its five-day window is deliberately *not* added to `fetched_matches`, so the next run treats it as unfetched and fetches it again; once the window closes it is checkpointed, recorded in `checkpoints/unparsed_matches.json`, and never retried. Each run tallies complete / held / permanently unparsed and prints the three counts. Do not "fix" the missing `add()` — the absence is the feature, and `tests/test_suspect.py::TestClassifyFetch` is what holds it.
 
-**`CORE_FIELDS` must list every field the flat row is built from.** With `SAVE_RAW` off that list *is* the stored payload, so a field missing from it reads downstream as missing from the API.
+**A document is written atomically; a store is appended to.** `write_text_atomic()` writes to `<path>.tmp` and renames over the original, so an interrupt leaves the previous version rather than half of two — the ledger is 10,050 hand-made verdicts rewritten daily, and a truncated checkpoint means re-fetching the whole dataset. `append_text()` writes whole lines and fsyncs, so the cost of adding a match is the size of that match. **`write_text_atomic` passes no `newline=` argument on purpose**: every file it writes is already committed with the platform's line endings, and pinning them would turn the next run's diff into a whole-file rewrite. `append_text` pins `\n`, because that file is appended to by whichever machine ran the pipeline and will one day be two of them.
+
+**`backfill_standard_store()` runs at the top of `main()` and is a no-op after the first time.** It streams the legacy 1 GB `data/matches.json` into the Standard store when there is a raw file and no store — without it, the first run after the split would rebuild the CSV from a store holding only that morning's matches. It **deletes nothing**: reconciling the store against the CSV and removing the raw file is `11`, and deliberately a human's decision.
 
 **The module does nothing when imported.** `main()` is the only entry point and only the `__main__` guard calls it, so `python opendota_pipeline.py` and `auto_update.py` work exactly as before while `import opendota_pipeline` costs nothing. Reintroducing module-level execution breaks `tests/test_pipeline_shell.py`.
 
-**To re-fetch a league's matches** (e.g. objectives were missing): remove those match IDs from `checkpoints/fetched_matches.json` *and* those records from `data/matches.json`, then re-run.
+**To re-fetch a league's matches** (e.g. objectives were missing): remove those match IDs from `checkpoints/fetched_matches.json` and re-run. The store needs no editing — the new record is appended and wins over the old one on read.
 
 **API:** OpenDota (`https://api.opendota.com/api`), 60 calls/min and 50k/month on free tier. Endpoints: `/leagues`, `/leagues/{id}/matches`, `/matches/{id}`, `/constants/patch`, `/proMatches`. **`/explorer` is not used by anything scheduled** — it answers the whole candidate-pool question in one arbitrary-SQL call and was used by hand, once, to record `tests/fixtures/league_matches_2026.json.gz`. A daily job depending on it is one schema change from breaking.
 
@@ -236,13 +248,14 @@ Obtains the Tier 1 calendar that defines the dataset's scope. Parsing lives in `
 ## Hosting
 
 - Streamlit Community Cloud, redeploys automatically on every push to `master`
-- Five data files are committed: `matches_flat.csv`, `meta.json`, `tier1_calendar.json`, `leagues.json` and `tier1_resolution.json`. `matches.json` and the Liquipedia cache stay local. All five are in the `DEPLOYED` list in `push_data.py` **and** `auto_update.py` — adding a new deployed data file means editing both.
+- Six data files are committed: `matches_flat.csv`, `meta.json`, `tier1_calendar.json`, `leagues.json`, `tier1_resolution.json` and `matches_standard.jsonl`. The raw sink and the Liquipedia cache stay local. All six are in the `DEPLOYED` list in `push_data.py` **and** `auto_update.py` — adding a new deployed data file means editing both. Nothing deployed reads the Standard store; it ships because a modelling asset living on one workstation is the thing the artifact split was for.
 - `auto_update.py` exits early when nothing changed, and **the ledger and the Tier 1 resolution both count as change alongside the CSV**. A run that fetched no matches but discovered a new league has found the one thing this job exists to notice; testing the CSV alone would leave that `pending` entry dirty in the working tree until somebody happened to look. The resolution file is safe to test on because it is only rewritten when the mapping itself moves.
 - Streamlit may not redeploy on CSV-only pushes — always use `push_data.py`, which bumps a `# data: YYYY-MM-DD` comment in `dashboard.py` so a `.py` file always changes. The `ttl=1800` on `load_data()` is the safety net.
 
 ## Key Technical Decisions
 
-- `SAVE_RAW` — full raw API response saved to `matches.json`, enabling future hero/player extraction. Reads from an env var; defaults `true` locally, set `false` in CI.
+- `SAVE_RAW` — whether the full raw payload is *also* written to `data/matches_raw.jsonl`. **Defaults off**, everywhere: 288 KB a match can live neither in the repository nor on a runner. Every match is fetched in full regardless, and a Standard record is extracted from it, so this is a seam and not a source. Set `SAVE_RAW=true` to re-open it for modelling — a configuration change, which is the acceptance criterion ADR-0002 wrote it for.
+- The Standard record is 20.1 KB a match against a raw 288 KB, measured, and the store 37.5 MB for 1,822 matches — against the 20 KB and 35 MB ADR-0002 estimated. Two things paid for that, both recorded in ADR-0010: the per-fight player breakdown, and four decimal places of benchmark precision. Keeping every non-timeseries player field came to 38 KB a match, which passes GitHub's 100 MB file limit inside two seasons — the 20 KB in ADR-0002 was not free.
 - Match-level checkpoint only — league match-ID lists are always re-fetched so new matches are detected.
 - Buildings counted via `goodguys`/`badguys` in the `key` field, not the `team` field, which is absent on `building_kill` events.
 - Patch IDs mapped dynamically from the OpenDota constants API at the start of `main()`, then passed down as an argument. The mapped name is written twice — as `patch`, which `read_csv` re-infers as a float, and as `patch_label`, the string the dashboard reads. `patch` has no consumer left in this repo; it stays because removing a column from a published CSV is a bigger change than issue `04` asked for, and it is a candidate for deletion, not for use.
@@ -266,6 +279,8 @@ Obtains the Tier 1 calendar that defines the dataset's scope. Parsing lives in `
 - The worst case for API spend is a started event that never resolves: it stays awaiting for a year and every run walks the full 259 pages looking for it. Affordable daily, not comfortable at the six-hourly cadence `13` introduces — the fix is a shorter horizon on how long a *gap* keeps being retried, and it belongs with that change.
 - The ledger was seeded with the *curated* league names from the retired `ALL_LEAGUES` dict, not OpenDota's. `league_name` is written onto every match row and grouped on by the dashboard, so seeding "SLAM IV" over "Slam IV" would have split that tournament in two the next time a match was fetched.
 - Replacing the dict with the ledger was verified by running the full pipeline and confirming `matches_flat.csv` came out byte-identical across all 1,822 rows.
+- Splitting the serving and modelling paths was verified the same way: all 1,822 matches extracted to Standard, the flat rows rebuilt from the store, `matches_flat.csv` byte-identical. Three refactors, one ritual — if a change to the pipeline cannot be checked this way, that is worth noticing before it lands.
+- The Standard store is read **last-write-wins in first-seen order**, which is where the "a match fetched twice must not be counted twice" invariant now lives. It used to be an in-memory upsert (`store_match`), and moving it to the read side is what let the write side become an append.
 
 ## Adding New Leagues
 
@@ -297,5 +312,5 @@ Python 3.11.5. Key libraries: requests, pandas, plotly, streamlit.
 ## Out of Scope for Now
 
 - Match outcome or duration prediction modelling
-- Player-level stats (present in raw `matches.json`, not extracted)
-- Hero picks/bans analysis (present in raw `matches.json`, not extracted)
+- Player-level stats (retained in `data/matches_standard.jsonl`, not surfaced)
+- Hero picks/bans analysis (retained in `data/matches_standard.jsonl`, not surfaced)

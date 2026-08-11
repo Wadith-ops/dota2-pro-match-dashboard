@@ -77,6 +77,7 @@ DEPLOYED = [
     "data/tier1_calendar.json",
     "data/leagues.json",
     "data/tier1_resolution.json",
+    "data/matches_standard.jsonl",
     "dashboard.py",
 ]
 run(["git", "add", *[p for p in DEPLOYED if (HERE / p).exists()]])

@@ -46,6 +46,11 @@ DEPLOYED = [
     # nothing. Rewritten only when that answer changes, so it is never a commit
     # carrying a fresh timestamp and no news.
     "data/tier1_resolution.json",
+    # The Standard modelling store. Nothing deployed reads it — it ships because
+    # a modelling asset that lives on one workstation is the thing the artifact
+    # split was for. Appended to, never rewritten, so a commit carries only the
+    # matches the run added.
+    "data/matches_standard.jsonl",
     "dashboard.py",
 ]
 present = [p for p in DEPLOYED if (HERE / p).exists()]
