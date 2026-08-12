@@ -42,6 +42,8 @@ from core import (
     format_audit_report,
     known_team_ids,
     league_catalogue,
+    recordable_resolutions,
+    resolution_problems,
     resolution_walk_start,
     resolve_tier1_events,
     summarise_leagues,
@@ -53,6 +55,32 @@ from core import (
 # so this is 100,000 — and it costs nothing unless it is needed, because the
 # walk stops the moment it crosses its cutoff either way.
 AUDIT_MAX_PAGES = 1000
+
+
+def load_ledger(api_leagues, dry_run):
+    """
+    The ledger to audit against.
+
+    `--dry-run` reads the file and stops there. The pipeline's `load_ledger`
+    does more than read: it records newly discovered leagues as `pending` and
+    **rewrites the file** when it finds any, and seeds a fresh 10,050-line one
+    when the file is missing. Both are right for a daily run and neither is
+    something a command promising to write nothing may do — so a dry run gets
+    the plain read, and reports rather than repairs a file it cannot parse.
+    """
+    if not dry_run:
+        return pipeline.load_ledger(api_leagues)
+
+    ledger = pipeline.read_ledger()
+
+    if ledger is None:
+        print(f"  Could not read {pipeline.LEDGER_FILE} — a dry run will not "
+              f"seed or repair it")
+        return {"leagues": []}
+
+    print(f"  Ledger: {len(ledger.get('leagues') or [])} leagues, read only")
+
+    return ledger
 
 
 def known_teams():
@@ -136,7 +164,20 @@ def walk_for_candidates(events, catalogue, max_pages):
         print("  Read no pro matches — nothing can resolve this run")
         return {}
 
-    reached = min((match.get("start_time") or 0) for match in pro_matches)
+    # `is not None`, never `or 0` — the same rule `fetch_pro_matches` follows
+    # one call up. A single row with no start time would make this the epoch,
+    # print a walk reaching back to 1970 and, worse, make the "stopped short"
+    # test below false: the warning that separates "we ran out of pages" from
+    # "OpenDota has no data" would go missing exactly when it is needed.
+    played = [match["start_time"] for match in pro_matches
+              if match.get("start_time") is not None]
+
+    if not played:
+        print(f"  Read {len(pro_matches)} pro matches, none carrying a start "
+              f"time — nothing can be placed in a window")
+        return {}
+
+    reached = min(played)
 
     print(f"  Read {len(pro_matches)} pro matches back to "
           f"{datetime.fromtimestamp(reached, tz=timezone.utc):%Y-%m-%d}")
@@ -153,19 +194,29 @@ def walk_for_candidates(events, catalogue, max_pages):
     return pipeline.confirm_candidates(shortlist, catalogue)
 
 
-def record_resolutions(ledger, resolutions, dry_run):
+def record_resolutions(ledger, resolutions, findings, dry_run):
     """
     Writes what the audit worked out onto the ledger: `tier1_event`, and only
     that.
 
-    `apply_resolutions` never touches a verdict and never clears a mapping, so
-    the worst an audit can do to the ledger is name the tournament a league
-    played — which is discovery, and is what the daily run writes too.
+    `apply_resolutions` never touches a verdict, so the worst this can do is
+    name the tournament a league played — which is discovery, and is what the
+    daily run writes too. It does **not** follow that every resolution is safe
+    to write: `core.recordable_resolutions` holds back the ones that would
+    displace an existing answer rather than add one, and they are reported as
+    withheld rather than dropped in silence.
 
     `data/tier1_resolution.json` is deliberately left alone. That file's horizon
     is this year and next; an audit of the back catalogue writing history into
     it would put events nobody can act on onto the dashboard's Upcoming tab.
     """
+    resolutions, withheld = recordable_resolutions(resolutions, findings)
+
+    for resolution in withheld:
+        print(f"  Withheld: '{resolution['event']}' → league "
+              f"{resolution['league_id']} is not written, because doing so "
+              f"would displace a mapping rather than add one")
+
     ledger, changes = apply_resolutions(ledger, resolutions)
 
     if not changes:
@@ -200,7 +251,7 @@ def run_audit(opens=None, closes=None, dry_run=False, max_pages=AUDIT_MAX_PAGES)
     print("=" * 60)
 
     api_leagues = pipeline.fetch_all_leagues()
-    ledger      = pipeline.load_ledger(api_leagues)
+    ledger      = load_ledger(api_leagues, dry_run)
 
     rows, teams   = known_teams()
     opens, closes = audit_period(rows, opens, closes)
@@ -213,6 +264,15 @@ def run_audit(opens=None, closes=None, dry_run=False, max_pages=AUDIT_MAX_PAGES)
               "given")
         return []
 
+    if not teams:
+        # The tiebreaker is measured against the teams already in the dataset,
+        # so with none every candidate scores zero, the primary ranking key
+        # collapses, and windows are decided by coverage and match count alone.
+        # That answer would then be written to the ledger. Refuse instead.
+        print("  No tracked teams to rank candidates against — run the "
+              "pipeline before auditing")
+        return []
+
     print(f"  Auditing {opens} to {closes}, against {len(teams)} tracked teams")
 
     calendar = liquipedia.get_tier1_events()
@@ -220,18 +280,26 @@ def run_audit(opens=None, closes=None, dry_run=False, max_pages=AUDIT_MAX_PAGES)
     print(f"  Tier 1 calendar: {len(events)} events "
           f"(source: {calendar['source']})")
 
+    # Computed before the range guard, deliberately. The reverse check reads the
+    # whole calendar and the whole ledger and depends on the audited period not
+    # at all, so a period holding no events is no reason to skip it.
+    tracked = audit_tracked_leagues(ledger, events)
     audited = events_in_range(events, opens, closes)
 
     if not audited:
-        print(format_audit_report([], [], opens, closes))
+        print(format_audit_report([], tracked, opens, closes))
         return []
 
     print(f"  {len(audited)} Tier 1 event(s) fall inside the period")
 
-    if api_leagues is None:
-        # Without the league list a showmatch series inside a Tier 1 window
-        # cannot be told from the tournament, so every window would come back
-        # contested. Refusing is the honest answer; guessing is not.
+    # `not api_leagues`, never `is None` — the same rule the ledger's seed path
+    # follows and the opposite of the one the match loop follows. A league's
+    # *match* list is legitimately empty before it starts; the *league* list is
+    # not, since OpenDota has ten thousand. An empty one would leave every
+    # summary with no tier, which silently switches off the prune that keeps
+    # showmatch series out of a Tier 1 window — and the resulting mappings would
+    # then be written to the ledger.
+    if not api_leagues:
         print("  Could not read the league list — the audit cannot rank "
               "candidates without it, so nothing was checked")
         return []
@@ -241,13 +309,18 @@ def run_audit(opens=None, closes=None, dry_run=False, max_pages=AUDIT_MAX_PAGES)
 
     resolutions = resolve_tier1_events(audited, summaries, teams)
     findings    = audit_findings(resolutions, ledger)
-    tracked     = audit_tracked_leagues(ledger, events)
 
     print()
     print(format_audit_report(findings, tracked, opens, closes))
     print()
 
-    record_resolutions(ledger, resolutions, dry_run)
+    # The daily run's own check, run here too: one league claimed by two events
+    # is a mapping about to be evicted, and `recordable_resolutions` refuses to
+    # act on it — but refusing silently would be its own kind of quiet.
+    for problem in resolution_problems(ledger, resolutions):
+        print(f"  ATTENTION: {problem}")
+
+    record_resolutions(ledger, resolutions, findings, dry_run)
 
     print()
     print(format_audit_next_steps(findings))
@@ -263,6 +336,25 @@ def run_audit(opens=None, closes=None, dry_run=False, max_pages=AUDIT_MAX_PAGES)
     return findings
 
 
+def iso_date(text):
+    """
+    An ISO date off the command line, as the string the rest of the audit
+    compares.
+
+    Validated here rather than trusted, because the comparison downstream is a
+    **string** comparison against Liquipedia's dates. `2025-1-1` is a natural
+    typo and sorts below every real date, silently widening the range to the
+    whole calendar — an error that produces a plausible-looking answer instead
+    of a complaint.
+    """
+    try:
+        return date.fromisoformat(text).isoformat()
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            f"{text!r} is not an ISO date — write it as YYYY-MM-DD"
+        )
+
+
 def parse_args(argv):
     parser = argparse.ArgumentParser(
         description="Audit Tier 1 coverage against Liquipedia, in both "
@@ -270,13 +362,13 @@ def parse_args(argv):
                     "verdict.",
     )
     parser.add_argument(
-        "--from", dest="opens", metavar="YYYY-MM-DD",
+        "--from", dest="opens", metavar="YYYY-MM-DD", type=iso_date,
         help="first day of the period. Defaults to the dataset's earliest "
              "match — before that, an event is out of range rather than "
              "missing.",
     )
     parser.add_argument(
-        "--to", dest="closes", metavar="YYYY-MM-DD",
+        "--to", dest="closes", metavar="YYYY-MM-DD", type=iso_date,
         help="last day of the period. Defaults to today; an event that has "
              "not started has nothing to find.",
     )
@@ -290,7 +382,15 @@ def parse_args(argv):
              f"(default {AUDIT_MAX_PAGES}).",
     )
 
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+
+    # A backwards range selects no events, and no events is reported as
+    # "nothing was checked" — which reads like an answer. Refuse it where the
+    # mistake was made instead.
+    if args.opens and args.closes and args.opens > args.closes:
+        parser.error(f"--from {args.opens} is after --to {args.closes}")
+
+    return args
 
 
 def main(argv=None):

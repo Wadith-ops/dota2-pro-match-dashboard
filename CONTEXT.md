@@ -134,7 +134,7 @@ Its period is **derived from the data**: from the day of the dataset's earliest 
 - **Declined** — resolved to a league that is `rejected`. Not a fault; a decision on record. Reported anyway, because an audit is the one moment such a decision is worth reading again.
 - **Gap** — no candidate league at all, which is the *known gap* above.
 
-**Mismatch** — an event the ledger maps to one league and the audit resolves to another, or maps at all where the audit now resolves to nothing. It exists because the resolver never clears a mapping, so an answer from an older ranking survives untested for ever. A mismatch is reported for a human to read; nothing is rewritten on the strength of it.
+**Mismatch** — an event the ledger maps to one league and the audit resolves to another, or maps at all where the audit now resolves to nothing. It exists because the resolver never clears a mapping, so an answer from an older ranking survives untested for ever. A mismatch is reported for a human to read; **nothing is rewritten on the strength of it**, and that is enforced rather than intended: mappings are written by league id, so re-pointing an event at a second league would leave the first still naming it and orphan whatever the second one named.
 
 **Unlisted league** — the audit run the other way: a league being fetched that no Tier 1 event claims, either because nothing ever resolved to it or because it claims an event no longer on the list. A coverage list can be wrong in both directions and only one of them is visible from the calendar.
 

@@ -34,6 +34,7 @@ from core import (
     format_audit_next_steps,
     format_audit_report,
     league_catalogue,
+    recordable_resolutions,
     resolve_tier1_events,
     summarise_leagues,
 )
@@ -377,7 +378,22 @@ class TestTheReport:
         report = format_audit_report([], [], "2025-10-01", "2025-10-02")
 
         assert "nothing was checked" in report
-        assert "covered" not in report
+        assert "covered by an active league" not in report.lower()
+
+    def test_no_events_still_reports_the_other_direction(self):
+        # The reverse check reads the whole calendar and the whole ledger and
+        # depends on the audited period not at all.
+        report = format_audit_report(
+            [],
+            audit_tracked_leagues(
+                ledger((19719, "The International 2026", None, LEDGER_ACTIVE)),
+                [{"name": "BLAST Slam IV"}],
+            ),
+            "2025-10-01", "2025-10-02",
+        )
+
+        assert "nothing was checked" in report
+        assert "The International 2026 — no Tier 1 event resolved to it" in report
 
     def test_a_contested_window_shows_every_candidate_it_ranked(self):
         findings = audit_findings(
@@ -417,6 +433,81 @@ class TestTheReport:
         )
 
         assert "The International 2026 — no Tier 1 event resolved to it" in report
+
+
+class TestWhatIsSafeToWriteBack:
+    """
+    `apply_resolutions` keys its writes by **league id**, so re-pointing an
+    event at a second league does not move the mapping — it leaves the first
+    league still naming the event and overwrites whatever the second one used
+    to name. One write, two wrong answers, and a third event silently gone.
+    """
+
+    LEDGER = ledger(
+        (17419, "Slam IV", "BLAST Slam IV", LEDGER_ACTIVE),
+        (18863, "FISSURE PLAYGROUND 2", "FISSURE PLAYGROUND 2", LEDGER_ACTIVE),
+    )
+
+    def test_an_answer_that_reproduces_is_recordable(self):
+        resolutions = [resolution("BLAST Slam IV", 17419, name="Slam IV")]
+
+        recordable, withheld = recordable_resolutions(
+            resolutions, audit_findings(resolutions, self.LEDGER)
+        )
+
+        assert recordable == resolutions
+        assert withheld == []
+
+    def test_a_mismatch_is_withheld(self):
+        # This is the case a single timed-out request can produce:
+        # `confirm_candidates` drops a league it cannot re-read, the runner-up
+        # is promoted, and writing the result would displace a right answer.
+        resolutions = [resolution("BLAST Slam IV", 18863,
+                                  name="FISSURE PLAYGROUND 2")]
+
+        recordable, withheld = recordable_resolutions(
+            resolutions, audit_findings(resolutions, self.LEDGER)
+        )
+
+        assert recordable == []
+        assert [r["event"] for r in withheld] == ["BLAST Slam IV"]
+
+    def test_a_league_two_events_both_claim_is_withheld_from_both(self):
+        # Only one of the two mappings can survive and which one depends on
+        # dictionary order. Neither is written.
+        resolutions = [
+            resolution("BLAST Slam IV", 18863, name="FISSURE PLAYGROUND 2"),
+            resolution("FISSURE PLAYGROUND 2", 18863,
+                       name="FISSURE PLAYGROUND 2"),
+        ]
+
+        recordable, withheld = recordable_resolutions(resolutions, [])
+
+        assert recordable == []
+        assert len(withheld) == 2
+
+    def test_a_gap_is_neither_recorded_nor_withheld_for_a_clash(self):
+        # Every gap carries `league_id: None`, and two of them must not read as
+        # two events claiming the same league.
+        resolutions = [resolution("A", None), resolution("B", None)]
+
+        recordable, withheld = recordable_resolutions(resolutions, [])
+
+        assert recordable == resolutions
+        assert withheld == []
+
+    def test_an_unexamined_event_is_unaffected_by_another_events_mismatch(self):
+        resolutions = [
+            resolution("BLAST Slam IV", 18863, name="FISSURE PLAYGROUND 2"),
+            resolution("PGL Wallachia Season 6", 18920, name="PGL Wallachia"),
+        ]
+
+        recordable, withheld = recordable_resolutions(
+            resolutions, audit_findings(resolutions, self.LEDGER)
+        )
+
+        assert [r["event"] for r in recordable] == ["PGL Wallachia Season 6"]
+        assert [r["event"] for r in withheld] == ["BLAST Slam IV"]
 
 
 class TestWhatTheAuditLeavesForAHuman:

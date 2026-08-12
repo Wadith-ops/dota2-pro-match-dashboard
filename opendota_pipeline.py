@@ -757,8 +757,15 @@ def resolve_tier1_leagues(ledger, api_leagues, known_teams, now):
         # the events it did not reach resolve to nothing, and a gap that is
         # really "we ran out of pages" must not read like a gap that is really
         # "OpenDota has no data".
-        reached = min((match.get("start_time") or 0) for match in pro_matches
-                      ) if pro_matches else None
+        #
+        # `is not None`, never `or 0` — the same rule `fetch_pro_matches`
+        # follows over the same rows. One row with no start time would make
+        # this the epoch, which reads as a walk reaching 1970 and, worse, makes
+        # the test below false: the warning would go missing exactly when the
+        # walk fell short.
+        played  = [match["start_time"] for match in pro_matches
+                   if match.get("start_time") is not None]
+        reached = min(played) if played else None
 
         if reached is None:
             print("  Read no pro matches — nothing can resolve this run")

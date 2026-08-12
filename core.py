@@ -2074,6 +2074,55 @@ def audit_tracked_leagues(ledger, events):
     return tracked
 
 
+def recordable_resolutions(resolutions, findings):
+    """
+    The resolutions safe to write onto the ledger, which is not all of them.
+
+    `apply_resolutions` keys its writes by **league id**, and that is the whole
+    reason this filter exists. Re-pointing an event at a second league does not
+    move the mapping — it leaves the first league still naming the event and
+    overwrites whatever the second one used to name. One write, two wrong
+    answers, and the displaced event silently becomes a gap.
+
+    Two cases are therefore withheld:
+
+    - A **mismatch**. The ledger already maps this event to a different league,
+      or maps it where this run found none. The audit exists to *report* that a
+      recorded answer no longer reproduces; acting on it would let one
+      unreachable league during the confirmation pass rewrite a mapping that was
+      right — and `confirm_candidates` drops any league it cannot re-read, so a
+      single timed-out request is enough to promote a runner-up.
+    - A league **claimed by more than one event in this run**. Only one of the
+      two mappings can survive and which one depends on dictionary order.
+      `resolution_problems` says this out loud; this refuses to act on it.
+
+    Returns the resolutions to record and the ones held back, so the caller can
+    say what it did not do rather than quietly doing less.
+    """
+    mismatched = {record.get("event") for record in findings or []
+                  if record.get("mismatch")}
+
+    claimed = {}
+    for resolution in resolutions or []:
+        league_id = resolution.get("league_id")
+        if league_id is not None:
+            claimed.setdefault(league_id, []).append(resolution.get("event"))
+
+    contested = {league_id for league_id, events in claimed.items()
+                 if len(events) > 1}
+
+    recordable, withheld = [], []
+
+    for resolution in resolutions or []:
+        if (resolution.get("event") in mismatched
+                or resolution.get("league_id") in contested):
+            withheld.append(resolution)
+        else:
+            recordable.append(resolution)
+
+    return recordable, withheld
+
+
 def audit_totals(findings, tracked):
     """How many of each finding, in one dict — the audit's headline."""
     totals = {finding: 0 for finding in AUDIT_FINDINGS}
@@ -2123,6 +2172,15 @@ def _audit_section(heading, lines):
     return [f"  {heading}"] + (lines or ["    (none)"])
 
 
+def _audit_unlisted(tracked):
+    """The tracked leagues no Tier 1 event claims, one per line."""
+    return [
+        f"    {record['league_id']:>6}  {record['name']} — {record['reason']}"
+        for record in tracked or []
+        if record["finding"] == AUDIT_UNLISTED
+    ]
+
+
 def _audit_candidates(record):
     """The ranked candidates under a contested window, winner marked."""
     return [
@@ -2151,8 +2209,20 @@ def format_audit_report(findings, tracked, opens=None, closes=None):
         # Never "nothing is missing". No events audited means the calendar or
         # the range produced none, and reporting that as a clean bill of health
         # is the one thing this report must not do.
-        return (f"Tier 1 coverage audit{period}\n"
-                f"  No Tier 1 events fall inside this range — nothing was checked")
+        #
+        # The reverse check still runs. It reads the whole calendar and the
+        # whole ledger and depends on the range not at all, so a period holding
+        # no events is no reason to skip it — an audit reports in both
+        # directions or it is not an audit.
+        return "\n".join([
+            f"Tier 1 coverage audit{period}",
+            "  No Tier 1 events fall inside this range — nothing was checked",
+            "",
+        ] + _audit_section(
+            f"Tracked leagues no Tier 1 event claims "
+            f"({totals['unlisted']} of {_plural(totals['tracked'], 'league')})",
+            _audit_unlisted(tracked),
+        ))
 
     by_finding = {
         finding: [record for record in findings if record["finding"] == finding]
@@ -2219,11 +2289,8 @@ def format_audit_report(findings, tracked, opens=None, closes=None):
 
     lines += _audit_section(
         f"Tracked leagues no Tier 1 event claims "
-        f"({totals['unlisted']} of {_plural(totals['tracked'], 'league')})", [
-            f"    {record['league_id']:>6}  {record['name']} — {record['reason']}"
-            for record in tracked or []
-            if record["finding"] == AUDIT_UNLISTED
-        ],
+        f"({totals['unlisted']} of {_plural(totals['tracked'], 'league')})",
+        _audit_unlisted(tracked),
     ) + [""]
 
     lines += _audit_section("Covered by an active league", [

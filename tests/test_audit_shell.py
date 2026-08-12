@@ -66,6 +66,9 @@ class TestWritingWhatItWorkedOut:
                            "tier1_event": None, "verdict": "active"}]}
     RESOLUTIONS = [{"event": "FISSURE PLAYGROUND 2", "league_id": 18863,
                     "candidates": []}]
+    # No mismatch, so nothing is withheld. The findings the audit derives are
+    # what decides that — see `TestAMismatchIsNeverWritten` below.
+    FINDINGS = [{"event": "FISSURE PLAYGROUND 2", "mismatch": False}]
 
     @pytest.fixture
     def ledger_file(self, tmp_path, monkeypatch):
@@ -74,13 +77,17 @@ class TestWritingWhatItWorkedOut:
         return path
 
     def test_a_new_mapping_is_written(self, ledger_file):
-        audit_coverage.record_resolutions(self.LEDGER, self.RESOLUTIONS, False)
+        audit_coverage.record_resolutions(
+            self.LEDGER, self.RESOLUTIONS, self.FINDINGS, False
+        )
 
         stored = json.loads(ledger_file.read_text(encoding="utf-8"))
         assert stored["leagues"][0]["tier1_event"] == "FISSURE PLAYGROUND 2"
 
     def test_a_dry_run_writes_nothing(self, ledger_file):
-        audit_coverage.record_resolutions(self.LEDGER, self.RESOLUTIONS, True)
+        audit_coverage.record_resolutions(
+            self.LEDGER, self.RESOLUTIONS, self.FINDINGS, True
+        )
 
         assert not ledger_file.exists()
 
@@ -88,7 +95,9 @@ class TestWritingWhatItWorkedOut:
         mapped = {"leagues": [dict(self.LEDGER["leagues"][0],
                                    tier1_event="FISSURE PLAYGROUND 2")]}
 
-        audit_coverage.record_resolutions(mapped, self.RESOLUTIONS, False)
+        audit_coverage.record_resolutions(
+            mapped, self.RESOLUTIONS, self.FINDINGS, False
+        )
 
         assert not ledger_file.exists()
 
@@ -98,10 +107,79 @@ class TestWritingWhatItWorkedOut:
         pending = {"leagues": [dict(self.LEDGER["leagues"][0],
                                     verdict="pending")]}
 
-        audit_coverage.record_resolutions(pending, self.RESOLUTIONS, False)
+        audit_coverage.record_resolutions(
+            pending, self.RESOLUTIONS, self.FINDINGS, False
+        )
 
         stored = json.loads(ledger_file.read_text(encoding="utf-8"))
         assert stored["leagues"][0]["verdict"] == "pending"
+
+    def test_a_mismatch_is_withheld_and_said_out_loud(self, ledger_file, capsys):
+        # The destructive case. `apply_resolutions` keys by league id, so
+        # writing this would leave 17419 still naming BLAST Slam IV *and* point
+        # 18863 at it too — orphaning FISSURE PLAYGROUND 2 in the same write.
+        ledger = {"leagues": [
+            {"league_id": 17419, "name": "Slam IV",
+             "tier1_event": "BLAST Slam IV", "verdict": "active"},
+            {"league_id": 18863, "name": "FISSURE PLAYGROUND 2",
+             "tier1_event": "FISSURE PLAYGROUND 2", "verdict": "active"},
+        ]}
+
+        audit_coverage.record_resolutions(
+            ledger,
+            [{"event": "BLAST Slam IV", "league_id": 18863, "candidates": []}],
+            [{"event": "BLAST Slam IV", "mismatch": True}],
+            False,
+        )
+
+        assert not ledger_file.exists()
+        assert "Withheld" in capsys.readouterr().out
+
+
+class TestReadingTheLedger:
+    """
+    A dry run promises to write nothing, and `pipeline.load_ledger` does not
+    keep that promise: it records newly discovered leagues and rewrites the
+    file, and seeds a fresh one when the file is missing.
+    """
+
+    LEDGER = {"leagues": [{"league_id": 18863, "name": "FISSURE PLAYGROUND 2",
+                           "tier1_event": None, "verdict": "active"}]}
+    DISCOVERED = [{"leagueid": 18863, "name": "FISSURE PLAYGROUND 2",
+                   "tier": "professional"},
+                  {"leagueid": 99999, "name": "Brand New League",
+                   "tier": "professional"}]
+
+    @pytest.fixture
+    def ledger_file(self, tmp_path, monkeypatch):
+        path = tmp_path / "leagues.json"
+        path.write_text(json.dumps(self.LEDGER), encoding="utf-8")
+        monkeypatch.setattr(pipeline, "LEDGER_FILE", str(path))
+        return path
+
+    def test_a_dry_run_does_not_record_a_newly_discovered_league(
+        self, ledger_file
+    ):
+        before = ledger_file.read_text(encoding="utf-8")
+
+        audit_coverage.load_ledger(self.DISCOVERED, dry_run=True)
+
+        assert ledger_file.read_text(encoding="utf-8") == before
+
+    def test_a_real_run_still_does(self, ledger_file):
+        audit_coverage.load_ledger(self.DISCOVERED, dry_run=False)
+
+        stored = json.loads(ledger_file.read_text(encoding="utf-8"))
+        assert 99999 in [entry["league_id"] for entry in stored["leagues"]]
+
+    def test_a_dry_run_reports_an_unreadable_ledger_rather_than_seeding_one(
+        self, ledger_file, capsys
+    ):
+        ledger_file.write_text("not json", encoding="utf-8")
+
+        assert audit_coverage.load_ledger(self.DISCOVERED, True) == {"leagues": []}
+        assert not audit_coverage.load_ledger(self.DISCOVERED, True)["leagues"]
+        assert "will not seed or repair it" in capsys.readouterr().out
 
 
 class TestTheWholeAuditRunsEndToEnd:
@@ -211,6 +289,43 @@ class TestTheWholeAuditRunsEndToEnd:
         assert findings == []
         assert "nothing was checked" in capsys.readouterr().out
 
+    def test_a_period_holding_no_events_still_reports_the_other_direction(
+        self, wired, monkeypatch, capsys
+    ):
+        # The reverse check reads the whole calendar and the whole ledger and
+        # depends on the period not at all. An audit reports in both directions
+        # or it is not an audit.
+        ledger = json.loads(wired.read_text(encoding="utf-8"))
+        ledger["leagues"][0]["verdict"] = "active"
+        wired.write_text(json.dumps(ledger), encoding="utf-8")
+
+        audit_coverage.run_audit("2024-01-01", "2024-12-31")
+
+        assert "no Tier 1 event resolved to it" in capsys.readouterr().out
+
+    def test_an_empty_league_list_stops_the_audit_like_a_failed_one(
+        self, wired, monkeypatch, capsys
+    ):
+        # OpenDota has ten thousand leagues, so `[]` is a failure and not an
+        # answer. Carrying on would leave every summary with no tier, switching
+        # off the prune that keeps showmatch series out of a Tier 1 window —
+        # and the resulting mappings would be written to the ledger.
+        monkeypatch.setattr(pipeline, "fetch_all_leagues", lambda: [])
+
+        assert audit_coverage.run_audit() == []
+        assert "cannot rank candidates without it" in capsys.readouterr().out
+
+    def test_no_tracked_teams_stops_the_audit_rather_than_ranking_on_nothing(
+        self, wired, monkeypatch, capsys
+    ):
+        # With no teams every candidate scores zero, the primary ranking key
+        # collapses, and windows fall through to coverage and match count. That
+        # answer would then be written to the ledger.
+        monkeypatch.setattr(pipeline, "read_standard_store", lambda: [])
+
+        assert audit_coverage.run_audit("2025-10-01", "2025-12-31") == []
+        assert "No tracked teams" in capsys.readouterr().out
+
 
 class TestTheCommandLine:
     def test_the_defaults_leave_both_ends_to_the_data(self):
@@ -218,6 +333,25 @@ class TestTheCommandLine:
 
         assert args.opens is None and args.closes is None
         assert args.dry_run is False
+
+    def test_an_unpadded_date_is_an_error_not_a_wider_range(self):
+        # The comparison downstream is a string comparison against Liquipedia's
+        # dates, and "2025-1-1" sorts below every real one — silently widening
+        # the range to the whole calendar and answering plausibly.
+        with pytest.raises(SystemExit):
+            audit_coverage.parse_args(["--from", "2025-1-1"])
+
+    def test_a_date_that_is_not_a_date_at_all_is_an_error(self):
+        with pytest.raises(SystemExit):
+            audit_coverage.parse_args(["--to", "last Tuesday"])
+
+    def test_a_backwards_range_is_refused_where_the_mistake_was_made(self):
+        # It would select no events, and no events is reported as "nothing was
+        # checked" — which reads like an answer.
+        with pytest.raises(SystemExit):
+            audit_coverage.parse_args(
+                ["--from", "2026-01-01", "--to", "2025-01-01"]
+            )
 
     def test_the_period_and_the_dry_run_are_read_off_the_command_line(self):
         args = audit_coverage.parse_args(
