@@ -24,12 +24,105 @@ UNKNOWN_PATCH = "Unknown"
 
 # How the CSV must be read back. `patch_label` is written as "7.40" and pandas
 # would otherwise re-infer it as the float 7.4, losing the trailing zero — the
-# thing this column exists to preserve. `suspect_reason` is blank on most rows,
-# and blank reads back as NaN rather than "" — consumers fill it. Passed to
-# `read_csv` by the dashboard.
-CSV_DTYPES = {"patch_label": str, "suspect_reason": str}
+# thing this column exists to preserve. `patch_hotfix` is the same story: most
+# of its values carry a letter, but "7.40" with none re-infers as a float like
+# any other. `suspect_reason` is blank on most rows, and blank reads back as NaN
+# rather than "" — consumers fill it. Passed to `read_csv` by the dashboard.
+CSV_DTYPES = {"patch_label": str, "patch_hotfix": str, "suspect_reason": str}
 
 _PATCH_NAME = re.compile(r"^(\d+)\.(\d+)(.*)$")
+
+
+def gameplay_patch(name):
+    """
+    The gameplay patch a name belongs to: "7.40" for "7.40", "7.40c" and "7.40b"
+    alike, and None for a name that is not a patch at all ("Unknown").
+
+    This is what makes a hotfix comparable with a gameplay patch. Both columns
+    are strings the API chose, and neither can be trusted to be a number.
+    """
+    parsed = _PATCH_NAME.match(str(name).strip())
+    return f"{parsed.group(1)}.{parsed.group(2)}" if parsed else None
+
+
+def patch_releases(patch_list):
+    """
+    Valve's patch list as the ascending `[(timestamp, name)]` table hotfix
+    resolution reads.
+
+    Entries missing either field are dropped rather than guessed at: a release
+    with no timestamp cannot place a match on either side of it.
+    """
+    return sorted(
+        (entry["patch_timestamp"], entry["patch_name"])
+        for entry in patch_list
+        if entry.get("patch_timestamp") is not None and entry.get("patch_name")
+    )
+
+
+def resolve_hotfix(start_time, patch_label, releases):
+    """
+    The lettered patch a match was played on — "7.40c" where `patch_label` says
+    "7.40" — resolved from when the match started.
+
+    **`patch_label` decides the gameplay patch; Valve's list only chooses the
+    revision within it.** Valve's timestamps are all exactly midnight US/Pacific
+    — all 117 of them — so the field is a release *date* dressed as a moment,
+    and on release day it puts every match from midnight onwards on a patch the
+    client did not have yet. That cost 28 matches of the dataset. OpenDota's
+    constants carry the release to the second, and `patch_label` is derived from
+    them, so the gameplay patch is settled before this function is asked
+    anything. See ADR-0012.
+
+    Returns None when there is nothing to resolve from — no start time, or a
+    release table that could not be fetched. Callers must treat that as "not
+    resolved this run" and never as "no hotfix": see `carry_forward_hotfix`.
+    """
+    if start_time is None or not releases:
+        return None
+
+    played = [name for stamp, name in releases if stamp <= start_time]
+
+    if not played:
+        return None
+
+    # An unrecognisable label — "Unknown" — is not a claim about the gameplay
+    # patch, so there is nothing to hold the answer inside. Valve's list is then
+    # the only evidence there is, and it is better than none.
+    base = gameplay_patch(patch_label)
+
+    if base is None:
+        return played[-1]
+
+    within = [name for name in played if gameplay_patch(name) == base]
+
+    # Nothing released within this gameplay patch yet: the match is on the
+    # unrevised patch, which is what `patch_label` already says it is. This is
+    # the case where OpenDota dates the release *earlier* than Valve dates the
+    # notes, and it is why the fallback is the label rather than None.
+    return within[-1] if within else patch_label
+
+
+def carry_forward_hotfix(rows, previous):
+    """
+    Keeps the hotfix already recorded for a match wherever this run could not
+    resolve one. Returns `(rows, carried)`.
+
+    The CSV is rebuilt in full every run, so a failed fetch of Valve's patch
+    list would otherwise blank a column that has values in it — a whole column
+    of data lost to one unreachable host. Nothing here can *change* an answer:
+    it only fills where this run has none.
+    """
+    carried = 0
+    filled  = []
+
+    for row in rows:
+        if row.get("patch_hotfix") is None and previous.get(row.get("match_id")):
+            row = {**row, "patch_hotfix": previous[row["match_id"]]}
+            carried += 1
+        filled.append(row)
+
+    return filled, carried
 
 
 def patch_sort_key(label):
@@ -42,9 +135,8 @@ def patch_sort_key(label):
     labels as plain strings is no better: it puts "7.9" after "7.40".
 
     Lettered hotfix names ("7.40b") sort directly after the patch they revise.
-    OpenDota does not report them today — its constants are gameplay-patch
-    granularity only — so that branch is there for the day the pipeline
-    resolves hotfixes, not for data it currently sees.
+    That branch was forward cover until `patch_hotfix` arrived; it is now the
+    order that column sorts in, and no second sort key was needed for it.
     """
     parsed = _PATCH_NAME.match(str(label).strip())
     if not parsed:
@@ -319,12 +411,15 @@ def classify_fetch(match, now):
     return FETCH_HELD if retry_window_open(match, now) else FETCH_UNPARSED
 
 
-def flatten_match(match, patch_map):
+def flatten_match(match, patch_map, releases=()):
     """
     Flattens a single raw match dictionary into a flat row for the DataFrame.
 
-    `patch_map` is passed in rather than read from a module global, because
-    building it is a network call. Injecting it is what lets this run offline.
+    `patch_map` and `releases` are passed in rather than read from module
+    globals, because building either is a network call. Injecting them is what
+    lets this run offline. `releases` defaults to empty so a caller reading rows
+    for something other than the patch — the coverage audit reads them for team
+    ids — need not fetch a patch list to get them.
     """
     # ── Patch mapping ─────────────────────────────────────────
     # `patch_label` is the display form and is written here rather than rebuilt
@@ -333,12 +428,14 @@ def flatten_match(match, patch_map):
     raw_patch = match.get("patch")
     patch     = (patch_map.get(raw_patch, str(raw_patch))
                  if raw_patch is not None else None)
+    label     = patch if patch is not None else UNKNOWN_PATCH
 
     # ── Duration conversions ──────────────────────────────────
     duration_secs = match.get("duration")
     duration_mins = round(duration_secs / 60, 1) if duration_secs else None
 
-    game_mode = match.get("game_mode")
+    game_mode  = match.get("game_mode")
+    start_time = match.get("start_time")
 
     # ── Flat fields ───────────────────────────────────────────
     row = {
@@ -346,8 +443,12 @@ def flatten_match(match, patch_map):
         "league_id"         : match.get("leagueid"),
         "league_name"       : match.get("league_name"),
         "patch"             : patch,
-        "patch_label"       : patch if patch is not None else UNKNOWN_PATCH,
-        "start_time"        : match.get("start_time"),
+        "patch_label"       : label,
+        # The finer grain, and a second column rather than a replacement: three
+        # patch buckets become nine, four of them under 65 matches, which is too
+        # few to price an over/under off. `patch_label` stays the headline axis.
+        "patch_hotfix"      : resolve_hotfix(start_time, label, releases),
+        "start_time"        : start_time,
         "duration_secs"     : duration_secs,
         "duration_mins"     : duration_mins,
         "radiant_win"       : match.get("radiant_win"),
@@ -394,11 +495,11 @@ def flatten_match(match, patch_map):
     return row
 
 
-def build_rows(matches, patch_map):
+def build_rows(matches, patch_map, releases=()):
     """
     Flattens every raw match into a match row. One row per match.
     """
-    return [flatten_match(match, patch_map) for match in matches]
+    return [flatten_match(match, patch_map, releases) for match in matches]
 
 
 def coverage_meta(rows, generated_at):

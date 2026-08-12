@@ -53,6 +53,21 @@ class TestCsvRoundTrip:
 
         assert round_trip(rows)["patch_label"].tolist() == ["7.40b"]
 
+    def test_the_hotfix_survives_as_a_string_when_it_carries_no_letter(
+        self, patch_map, patch_release_table
+    ):
+        # Most hotfix names end in a letter and would survive anything. The
+        # first release of a gameplay patch does not — "7.40" re-infers as 7.4
+        # exactly the way `patch_label` used to, and the column would then hold
+        # names and floats together.
+        rows = build_rows(
+            [{"match_id": 1, "patch": 59, "start_time": 1765900000}],
+            patch_map,
+            patch_release_table,
+        )
+
+        assert round_trip(rows)["patch_hotfix"].tolist() == ["7.40"]
+
     def test_the_quality_flag_survives_as_a_boolean(self, patch_map):
         rows = build_rows(
             [{"match_id": 1, "objectives": [], "radiant_score": 1},
@@ -99,9 +114,8 @@ class TestPatchSortKey:
         ]
 
     def test_orders_a_lettered_patch_after_the_one_it_revises(self):
-        # Forward cover: hotfix names are not in the dataset today, only in
-        # Valve's patch list. If the pipeline ever resolves them, the axis is
-        # already in release order.
+        # Written as forward cover, and claimed by `patch_hotfix` — the axis
+        # that column sorts on needed no new code. See `tests/test_hotfix.py`.
         assert sorted(["7.41", "7.40b", "7.40"], key=patch_sort_key) == [
             "7.40",
             "7.40b",

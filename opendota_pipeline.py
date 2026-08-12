@@ -21,6 +21,7 @@ import pandas as pd
 
 import liquipedia
 from core import (
+    CSV_DTYPES,
     FETCH_HELD,
     FETCH_UNPARSED,
     LEDGER_ACTIVE,
@@ -31,6 +32,7 @@ from core import (
     apply_resolutions,
     build_rows,
     candidates_in_window,
+    carry_forward_hotfix,
     classify_fetch,
     coverage_meta,
     events_awaiting_resolution,
@@ -47,6 +49,7 @@ from core import (
     ledger_problems,
     merge_discovered_leagues,
     parse_standard_records,
+    patch_releases,
     resolution_problems,
     resolution_report,
     resolution_walk_start,
@@ -95,6 +98,13 @@ RESOLUTION_FILE = os.path.join(DATA_DIR, "tier1_resolution.json")
 
 # API Settings
 BASE_URL = "https://api.opendota.com/api"
+
+# Valve's own patch list — 117 entries, every lettered revision included, where
+# OpenDota's constants carry 61 gameplay patches and no hotfixes at all. It is
+# unauthenticated and answers plain JSON. This is the only non-OpenDota endpoint
+# the pipeline reaches; it still goes through `fetch_url`, which is where the
+# timeout and the retry schedule live.
+PATCH_LIST_URL = "https://www.dota2.com/datafeed/patchnoteslist"
 
 # The free tier allows 60 calls a minute. One second between calls is exactly
 # that, which is not under it: the sleep starts after the response, so a run of
@@ -339,6 +349,38 @@ def get_patch_map():
               f"name and were skipped")
 
     return patch_map
+
+
+# ── Fetch the hotfix release table from Valve ─────────────────
+def get_patch_releases():
+    """
+    Fetches Valve's patch list and returns the ascending release table
+    `core.resolve_hotfix` reads. An empty table on any failure.
+
+    The datafeed answers `{"patches": [...], "success": true}`, so success is a
+    field rather than only a status code — the same shape of trap the MediaWiki
+    endpoint sets, and checked the same way. An **empty** list is a failure too,
+    by the rule the patch constants and the league list follow: there is no such
+    thing as a Dota patch list with nothing in it.
+
+    A failure here costs nothing already recorded. `build_dataframe` carries the
+    existing column forward, so an unreachable host leaves `patch_hotfix` blank
+    on matches fetched today and untouched on the 1,822 that already have one.
+    """
+    payload = fetch_url(PATCH_LIST_URL)
+
+    if not isinstance(payload, dict) or not payload.get("success"):
+        print("  Could not fetch Valve's patch list — no hotfix will be "
+              "resolved this run")
+        return []
+
+    releases = patch_releases(payload.get("patches") or [])
+
+    if not releases:
+        print("  Valve's patch list came back with no usable releases — no "
+              "hotfix will be resolved this run")
+
+    return releases
 
 # %%
 # # Step 2 - API Fetcher
@@ -1106,7 +1148,38 @@ def write_meta(rows):
     return meta
 
 
-def build_dataframe(patch_map):
+def read_hotfix_column():
+    """
+    The `patch_hotfix` already recorded in the CSV, as `{match_id: name}`.
+
+    This is the one place the pipeline reads its own output, and it is read for
+    exactly one reason: the CSV is rebuilt whole every run, so a run that could
+    not fetch Valve's patch list would otherwise write a blank column over a
+    full one. An unreachable host must cost the newest matches their hotfix, not
+    every match its hotfix.
+
+    Anything unreadable — no file, no column, a damaged CSV — is an empty
+    mapping. Nothing here may stop a run: the column it protects is a nicety
+    beside the dataset it is a column of.
+    """
+    if not os.path.exists(CSV_FILE):
+        return {}
+
+    try:
+        previous = pd.read_csv(
+            CSV_FILE, usecols=["match_id", "patch_hotfix"], dtype=CSV_DTYPES
+        )
+    except (ValueError, pd.errors.ParserError, UnicodeDecodeError) as problem:
+        print(f"  Could not read the existing {CSV_FILE} for its hotfix column "
+              f"({problem}) — nothing to carry forward")
+        return {}
+
+    recorded = previous.dropna(subset=["patch_hotfix"])
+
+    return dict(zip(recorded["match_id"], recorded["patch_hotfix"]))
+
+
+def build_dataframe(patch_map, releases=()):
     """
     Flattens every Standard record into a match row, exports the CSV, and
     returns `(DataFrame, rows)`.
@@ -1121,6 +1194,11 @@ def build_dataframe(patch_map):
     tiebreaker is bootstrapped from the teams already in the dataset, and those
     are plain ints in the rows where the frame has re-read them as floats
     alongside NaN. `core.known_team_ids` reads the rows.
+
+    The hotfix column is carried forward from the CSV about to be replaced,
+    wherever this run resolved none. Rebuilding whole is what makes the store the
+    single source of truth; it is also what would let one unreachable host blank
+    a column, and this is the guard against that.
     """
     matches = read_standard_store()
 
@@ -1130,8 +1208,14 @@ def build_dataframe(patch_map):
 
     print(f"Flattening {len(matches)} matches...")
 
-    rows = build_rows(matches, patch_map)
-    df   = pd.DataFrame(rows)
+    rows, carried = carry_forward_hotfix(
+        build_rows(matches, patch_map, releases), read_hotfix_column()
+    )
+
+    if carried:
+        print(f"  {carried} hotfix label(s) kept from the previous CSV")
+
+    df = pd.DataFrame(rows)
 
     # ── Convert start_time from unix timestamp to readable date ──
     df["start_time"] = pd.to_datetime(df["start_time"], unit="s")
@@ -1182,6 +1266,12 @@ def main():
     patch_map = get_patch_map()
     print(f"Patch map loaded: {patch_map}")
 
+    # Two sources, two grains. OpenDota's constants name the gameplay patch a
+    # match was played on; Valve's list names the revision within it. The second
+    # never overrules the first — see `core.resolve_hotfix` and ADR-0012.
+    releases = get_patch_releases()
+    print(f"Patch releases loaded: {len(releases)}")
+
     # Fetched once and handed to both callers. The ledger needs the ids to spot
     # a league it has never seen; the resolver needs the tiers to keep a
     # showmatch series out of a Tier 1 window.
@@ -1189,7 +1279,7 @@ def main():
     ledger      = load_ledger(api_leagues)
 
     records  = run_pipeline(active_leagues(ledger))
-    df, rows = build_dataframe(patch_map)
+    df, rows = build_dataframe(patch_map, releases)
 
     resolve_tier1_leagues(
         ledger, api_leagues, known_team_ids(rows), datetime.now(timezone.utc)

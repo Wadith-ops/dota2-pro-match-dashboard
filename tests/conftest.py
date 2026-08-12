@@ -15,6 +15,8 @@ from pathlib import Path
 
 import pytest
 
+from core import patch_releases
+
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
 
 
@@ -79,6 +81,39 @@ def tier1_resolution():
 def patch_map():
     """The subset of the OpenDota patch constants the fixtures need."""
     return {58: "7.39", 59: "7.40", 60: "7.41"}
+
+
+@pytest.fixture
+def valve_patch_list():
+    """
+    Valve's whole patch list as `dota2.com/datafeed/patchnoteslist` answered it
+    on 2026-08-12: 117 entries from 7.08 to 7.41e, every lettered revision
+    included, in the `{"patches": [...], "success": true}` envelope it arrives
+    in — kept whole so the shell's unwrapping is exercised by the same fixture
+    as the resolution.
+
+    This is the only source for hotfix names. OpenDota's constants stop at the
+    gameplay patch.
+    """
+    return load_payload("valve_patch_list")
+
+
+@pytest.fixture
+def patch_release_table(valve_patch_list):
+    """The same list as the ascending `[(timestamp, name)]` table."""
+    return patch_releases(valve_patch_list["patches"])
+
+
+@pytest.fixture
+def hotfix_boundary_matches():
+    """
+    Every match in the dataset the two patch sources disagree about: 28 games of
+    DreamLeague Season 27, played on 2025-12-15 between Valve's timestamp for
+    7.40 and OpenDota's. Recorded 2026-08-12 at 1,822 matches.
+
+    Four fields per match, because the disagreement turns on two of them.
+    """
+    return load_payload("hotfix_boundary")
 
 
 # The two page-sized fixtures below are session-scoped: the Liquipedia envelope

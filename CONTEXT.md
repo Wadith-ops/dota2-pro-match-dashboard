@@ -38,13 +38,17 @@ Called a **tournament** in the dashboard UI; *league* is the API's word and the 
 
 ### Time
 
-**Patch** — the game version a match was played on. The meta shifts materially across patches, so patch is a primary comparison axis.
+**Patch** — the **gameplay** version a match was played on, `7.40` rather than `7.40c`. The meta shifts materially across patches, so patch is the primary comparison axis. The finer grain is the **hotfix**, below.
 
 Two columns carry it. **`patch_label`** is the name as the API gives it — `"7.39"`, `"7.40"`, `"7.41"` — written by the pipeline as a string and read back as one. It is the only form the dashboard reads: displayed, grouped, filtered and sorted. **`patch`** holds the same value, but `read_csv` re-infers it as a float and drops the trailing zero of `7.40`. Nothing in the dashboard touches it; it survives in the CSV for anything that wants the number, and displaying it is a bug.
 
 A patch name is not guaranteed to be a number: `"Unknown"` is the label for a match with no patch, and a patch newer than the cached constants falls back to its raw id. So labels are ordered with `patch_sort_key`, never `float()` — which throws on the first — and never as plain strings, which would put `7.9` after `7.40`.
 
-**The patch recorded is the gameplay patch, not the hotfix.** OpenDota's `/constants/patch` has 61 entries and every name is a plain `d.d`; hotfixes do not appear in it. A match played on 7.40c is therefore recorded as `7.40`. Valve's own patch list (`dota2.com/datafeed/patchnoteslist`, 117 entries) does carry `7.40b`, `7.41a` and the rest with release timestamps, so hotfix resolution by `start_time` is available if the finer grain is ever wanted — at the cost of splitting today's three patch buckets into nine, four of them under 65 matches. Not implemented.
+**Hotfix** — a lettered revision of a gameplay patch: `7.40b`, `7.41c`. It moves the meta without changing the patch's name, and OpenDota does not report it — `/constants/patch` has 61 entries and every name is a plain `d.d`. **`patch_hotfix`** carries it, resolved by the pipeline from the match's `start_time` against Valve's own patch list (`dota2.com/datafeed/patchnoteslist`, 117 entries). A match on the unrevised patch has the patch's own name as its hotfix — `7.41`, not blank.
+
+**`patch_hotfix` is a second column, never a replacement for `patch_label`.** Three patch buckets become nine, four of them under 65 matches, and the dashboard's primary output is over/under percentages — a 22-match bucket reads as precise and is not. The gameplay patch stays the headline comparison axis; the hotfix is the finer lens. Anything that ever shows a hotfix bucket must show its match count beside it.
+
+**The gameplay patch decides which hotfix a match can be on.** Valve's timestamps are all exactly midnight US/Pacific — all 117 — so the field is a release *date* dressed as a moment, and read literally it puts every match from midnight onwards on release day onto a patch the client did not have yet. `patch_label` settles the gameplay patch and Valve's list only chooses the revision within it, so the two columns cannot contradict each other. It cost 28 matches of one 2025-12-15 window; see ADR-0012.
 
 **Game length / duration** — wall-clock match length. `duration_secs` is the raw value; `duration_mins` is the display value and the one used in charts.
 
@@ -204,7 +208,7 @@ Tournaments are ordered by **first match date, descending** — latest first —
 
 ## Column dictionary (`matches_flat.csv`)
 
-**Match info:** `match_id`, `league_id`, `league_name`, `patch`, `patch_label`, `start_time`, `duration_secs`, `duration_mins`, `radiant_win`, `radiant_score`, `dire_score`, `game_mode`, `non_captains_mode`
+**Match info:** `match_id`, `league_id`, `league_name`, `patch`, `patch_label`, `patch_hotfix`, `start_time`, `duration_secs`, `duration_mins`, `radiant_win`, `radiant_score`, `dire_score`, `game_mode`, `non_captains_mode`
 
 **Teams:** `radiant_team_id`, `radiant_team_name`, `dire_team_id`, `dire_team_name`
 
@@ -224,7 +228,7 @@ Tournaments are ordered by **first match date, descending** — latest first —
 
 `total_roshan`, `total_kills`, `total_barracks`, `total_towers`, `both_lost_barracks`, `both_teams_roshan`
 
-`patch_label`, `is_suspect` and `suspect_reason` are **not** among them — they come from the CSV, and `load_data()` passes `core.CSV_DTYPES` to `read_csv` so the string columns arrive as strings.
+`patch_label`, `patch_hotfix`, `is_suspect` and `suspect_reason` are **not** among them — they come from the CSV, and `load_data()` passes `core.CSV_DTYPES` to `read_csv` so the string columns arrive as strings.
 
 ### Added in `build_team_perspective()`
 
@@ -237,6 +241,8 @@ Tournaments are ordered by **first match date, descending** — latest first —
 - A team-perspective row's `team_barracks_killed` equals the *opponent's* `*_barracks_lost`.
 - `game_mode` is overwhelmingly `2` (Captain's Mode); 12 matches are mode 1, and each carries `non_captains_mode: True`. Matches are **flagged, never dropped**, for their game mode. Any metric sensitive to draft format should filter on the flag or state that it doesn't.
 - `patch_label` is a non-empty string in every row — `"Unknown"` where the API reported no patch. That is what lets it survive the CSV as a label rather than a number.
+- `patch_hotfix` names a revision **of the patch `patch_label` names**: `gameplay_patch(patch_hotfix) == patch_label` in all 1,822 rows. The two columns disagreeing is a bug in the resolution, not a finer reading of the data. See ADR-0012.
+- A blank `patch_hotfix` means the release table could not be fetched and nothing was already recorded — never that the match has no hotfix. It is blank on no row today.
 - `first_blood_time_mins < 0` is **valid data** — a pre-horn kill, not an artefact. See ADR-0003.
 - An objective timing of `0` means the event happened on the horn; `null` means no such event was recorded. The two are never conflated.
 - A suspect match is excluded from figures but present in match history. Absence from a chart never means absence from the record, and `meta.json` states the excluded count so the dashboard can say how many. `excluded_count: null` means the figure was never computed — a `meta.json` older than `tier1-pipeline-automation/05` — and reads as "unknown", never as zero.

@@ -235,10 +235,12 @@ class TestARunSaysWhetherItFinished:
         monkeypatch.setattr(pipeline, "ensure_directories", lambda: None)
         monkeypatch.setattr(pipeline, "backfill_standard_store", lambda: None)
         monkeypatch.setattr(pipeline, "get_patch_map", lambda: {})
+        monkeypatch.setattr(pipeline, "get_patch_releases", lambda: [])
         monkeypatch.setattr(pipeline, "fetch_all_leagues", lambda: [])
         monkeypatch.setattr(pipeline, "load_ledger", lambda leagues: {"leagues": []})
         monkeypatch.setattr(pipeline, "run_pipeline", lambda leagues: [])
-        monkeypatch.setattr(pipeline, "build_dataframe", lambda patch_map: (None, []))
+        monkeypatch.setattr(pipeline, "build_dataframe",
+                            lambda patch_map, releases: (None, []))
         monkeypatch.setattr(
             pipeline, "resolve_tier1_leagues",
             lambda *args: print("resolving Tier 1 events..."),
