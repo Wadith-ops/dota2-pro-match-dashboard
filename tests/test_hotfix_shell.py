@@ -75,7 +75,42 @@ class TestFetchingValvesPatchList:
                             lambda url, **kwargs: {"success": True, "patches": []})
 
         assert pipeline.get_patch_releases() == []
-        assert "no usable releases" in capsys.readouterr().out
+        assert "no patches in it" in capsys.readouterr().out
+
+    @pytest.mark.parametrize("patches", [
+        {"7.40": 1765785600},        # an object where a list was expected
+        ["7.40", "7.40b"],           # a list of names rather than of entries
+        [{"patch_name": "7.40", "patch_timestamp": "not a time"}],
+        None,
+    ])
+    def test_a_malformed_patch_list_ends_the_hotfix_not_the_run(
+        self, patches, monkeypatch
+    ):
+        # This is the first call `main()` makes. Anything raising out of here is
+        # a day with no matches fetched, no CSV and no resolution — which is the
+        # opposite of what the column is worth.
+        monkeypatch.setattr(
+            pipeline, "fetch_url",
+            lambda url, **kwargs: {"success": True, "patches": patches},
+        )
+
+        assert pipeline.get_patch_releases() == []
+
+    def test_a_partly_unusable_list_is_said_out_loud_rather_than_returned_short(
+        self, monkeypatch, capsys
+    ):
+        # A table missing the newest release resolves every match after it to
+        # the one before, which reads as a meta that never moved.
+        monkeypatch.setattr(
+            pipeline, "fetch_url",
+            lambda url, **kwargs: {"success": True, "patches": [
+                {"patch_name": "7.40", "patch_timestamp": 1765785600},
+                {"patch_name": "7.40b"},
+            ]},
+        )
+
+        assert pipeline.get_patch_releases() == [(1765785600, "7.40")]
+        assert "1 patch release(s) had no name" in capsys.readouterr().out
 
 
 @pytest.fixture

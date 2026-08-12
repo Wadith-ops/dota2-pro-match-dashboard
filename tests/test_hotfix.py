@@ -81,6 +81,48 @@ class TestTheReleaseTable:
         assert patch_releases([]) == []
 
 
+class TestTheReleaseTableSurvivesAFeedNobodyHereVersions:
+    """
+    `get_patch_releases` is the first call `main()` makes. Anything that raises
+    out of it is a day with no matches fetched, no CSV and no resolution — so
+    this reads the feed defensively rather than trusting its shape.
+    """
+
+    def test_a_timestamp_delivered_as_a_digit_string_is_converted(self):
+        # Not hypothetical: `patch_number` in the same feed is already a string,
+        # so this representation changing is drift rather than damage. Dropping
+        # the whole table over it would switch the column off silently.
+        assert patch_releases([
+            {"patch_name": "7.40", "patch_timestamp": str(VALVE_7_40)},
+        ]) == [(VALVE_7_40, "7.40")]
+
+    def test_a_timestamp_that_is_not_a_time_is_dropped_not_sorted_against(self):
+        # `sorted` raises on a mix of ints and strings, and this is the one
+        # function standing between that and the whole run.
+        table = patch_releases([
+            {"patch_name": "7.40", "patch_timestamp": VALVE_7_40},
+            {"patch_name": "7.40b", "patch_timestamp": "not a time"},
+            {"patch_name": "7.40c", "patch_timestamp": None},
+        ])
+
+        assert table == [(VALVE_7_40, "7.40")]
+
+    def test_a_boolean_timestamp_is_not_read_as_a_number(self):
+        # `bool` is an `int` in Python, so True would otherwise be 1970.
+        assert patch_releases([{"patch_name": "7.40", "patch_timestamp": True}]) == []
+
+    def test_an_entry_that_is_not_an_object_is_skipped(self):
+        table = patch_releases([
+            "oops", None, {"patch_name": "7.40", "patch_timestamp": VALVE_7_40},
+        ])
+
+        assert table == [(VALVE_7_40, "7.40")]
+
+    def test_a_mapping_rather_than_a_list_yields_nothing_rather_than_raising(self):
+        # Iterating a dict yields its keys, which are strings.
+        assert patch_releases({"7.40": VALVE_7_40}) == []
+
+
 class TestEveryValveTimestampIsMidnightPacific:
     """
     The fact the whole boundary rule rests on. Valve's `patch_timestamp` looks

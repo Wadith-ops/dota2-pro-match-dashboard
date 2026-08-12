@@ -359,9 +359,12 @@ def get_patch_releases():
 
     The datafeed answers `{"patches": [...], "success": true}`, so success is a
     field rather than only a status code — the same shape of trap the MediaWiki
-    endpoint sets, and checked the same way. An **empty** list is a failure too,
-    by the rule the patch constants and the league list follow: there is no such
-    thing as a Dota patch list with nothing in it.
+    endpoint sets, and checked the same way. `patches` is checked for being a
+    list on top of that, the way `/constants/patch` and `/leagues` are: this is
+    the first call `main()` makes, and a payload that raises out of here is a
+    day with no matches fetched, no CSV and no resolution. An **empty** list is
+    a failure too, by the same rule: there is no such thing as a Dota patch list
+    with nothing in it.
 
     A failure here costs nothing already recorded. `build_dataframe` carries the
     existing column forward, so an unreachable host leaves `patch_hotfix` blank
@@ -374,11 +377,25 @@ def get_patch_releases():
               "resolved this run")
         return []
 
-    releases = patch_releases(payload.get("patches") or [])
+    patches = payload.get("patches")
+
+    if not isinstance(patches, list) or not patches:
+        print("  Valve's patch list came back with no patches in it — no "
+              "hotfix will be resolved this run")
+        return []
+
+    releases = patch_releases(patches)
+
+    # Said out loud rather than silently returned short, the way a partial patch
+    # map is. A table missing the newest release resolves every match after it
+    # to the one before, which reads as a meta that never moved.
+    if len(releases) != len(patches):
+        print(f"  {len(patches) - len(releases)} patch release(s) had no name or "
+              f"no usable timestamp and were skipped")
 
     if not releases:
-        print("  Valve's patch list came back with no usable releases — no "
-              "hotfix will be resolved this run")
+        print("  No usable releases in Valve's patch list — no hotfix will be "
+              "resolved this run")
 
     return releases
 

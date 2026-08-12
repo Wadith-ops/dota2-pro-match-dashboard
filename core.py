@@ -50,14 +50,47 @@ def patch_releases(patch_list):
     Valve's patch list as the ascending `[(timestamp, name)]` table hotfix
     resolution reads.
 
-    Entries missing either field are dropped rather than guessed at: a release
-    with no timestamp cannot place a match on either side of it.
+    Every entry is checked rather than trusted, because this reads a feed nobody
+    here versions. An entry missing either field is dropped rather than guessed
+    at — a release with no timestamp cannot place a match on either side of it —
+    and so is one whose timestamp is not a time. A **digit string** is accepted
+    and converted: the sibling `patch_number` in the same feed is already a
+    string, so that representation changing is drift rather than damage, and
+    dropping the whole table over it would switch the column off silently.
+
+    Nothing here raises. A run that cannot resolve a hotfix has to be a run that
+    still fetches matches — see `carry_forward_hotfix` for what an empty table
+    costs, which is nothing already recorded.
     """
-    return sorted(
-        (entry["patch_timestamp"], entry["patch_name"])
-        for entry in patch_list
-        if entry.get("patch_timestamp") is not None and entry.get("patch_name")
-    )
+    releases = []
+
+    for entry in patch_list:
+        if not isinstance(entry, dict):
+            continue
+
+        stamp = _release_time(entry.get("patch_timestamp"))
+        name  = entry.get("patch_name")
+
+        if stamp is not None and name:
+            releases.append((stamp, str(name)))
+
+    return sorted(releases)
+
+
+def _release_time(value):
+    """A release timestamp as a number, or None if it is not one."""
+    # `bool` is an `int` in Python, and True as a timestamp is 1970. Excluded
+    # first, because everything below would otherwise accept it.
+    if isinstance(value, bool):
+        return None
+
+    if isinstance(value, (int, float)):
+        return value
+
+    if isinstance(value, str) and value.strip().isdigit():
+        return int(value)
+
+    return None
 
 
 def resolve_hotfix(start_time, patch_label, releases):

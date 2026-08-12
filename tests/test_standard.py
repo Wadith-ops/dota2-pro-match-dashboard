@@ -161,13 +161,21 @@ class TestWhatStandardDiscards:
 
 
 class TestTheServingPathIsUnaffected:
-    def test_the_flat_row_is_the_same_either_way(self, every_match, patch_map):
+    def test_the_flat_row_is_the_same_either_way(
+        self, every_match, patch_map, patch_release_table
+    ):
         # The load-bearing test of the whole split. The dashboard reads the CSV,
         # the CSV is built from Standard records, and this says the substitution
         # changes nothing about them.
+        #
+        # The release table is passed rather than defaulted so that
+        # `patch_hotfix` is a resolved name on both sides. Left out, the column
+        # is None either way and compares equal without `start_time` having been
+        # read from the extract at all — a guard that holds by saying nothing.
         for match in every_match:
-            assert flatten_match(extract_standard(match), patch_map) == \
-                   flatten_match(match, patch_map)
+            assert flatten_match(extract_standard(match), patch_map,
+                                 patch_release_table) == \
+                   flatten_match(match, patch_map, patch_release_table)
 
     def test_a_suspect_match_is_still_suspect_after_extraction(
         self, empty_objectives_match, patch_map
