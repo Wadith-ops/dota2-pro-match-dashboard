@@ -10054,6 +10054,8 @@
     {"league_id": 65018, "name": "GameLadders DOTA 2 League ", "tier1_event": null, "verdict": "rejected"},
     {"league_id": 65019, "name": "BanglaGamer Dota 2 Championship", "tier1_event": null, "verdict": "rejected"},
     {"league_id": 20099, "name": "lsesports.ru x MirrorShard", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20100, "name": "The Goonternational 2026", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20100, "name": "The Goonternational 2026", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20101, "name": "Meet Many Retards", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20102, "name": "Meet Many Retards", "tier1_event": null, "verdict": "pending"}
   ]
 }
