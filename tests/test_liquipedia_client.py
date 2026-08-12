@@ -84,8 +84,10 @@ class TestParseRateLimiter:
         assert clock.sleeps == []
 
     def test_waits_out_the_remaining_interval_on_a_second_call(self):
-        # Two parse calls back to back must be 30 seconds apart, which is the
-        # case issue 14 hits when it walks several years of the page in one run.
+        # Two parse calls back to back must be 30 seconds apart. Nothing in the
+        # project does that today — issue 14 was expected to and does not, since
+        # the Tier 1 page is one table covering every year — so this test is the
+        # only thing holding a term of the API that no caller currently reaches.
         clock = FakeClock()
         limiter = ParseRateLimiter(monotonic=clock.monotonic, sleep=clock.sleep)
 

@@ -43,8 +43,12 @@ USER_AGENT = (
     "wade.yang94@gmail.com)"
 )
 
-# Condition 2. One parse call per run sits far inside this; the limiter exists
-# because issue 14 walks several years of the page in a single run.
+# Condition 2. One parse call per run sits far inside this, and issue 14 — the
+# back-catalogue audit that was expected to need several — turned out to need
+# one too: the Tier 1 page is a single table covering 2005 to 2027, so any
+# period is a slice of one response rather than a call per year. The interval
+# therefore protects nothing that currently happens, and it stays because it is
+# a term of the free API rather than a rate this project has to be talked into.
 PARSE_MIN_INTERVAL_SECONDS = 30.0
 
 # Condition 3. A day, because the Tier 1 list changes roughly 13 times a year —

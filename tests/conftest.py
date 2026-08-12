@@ -120,3 +120,35 @@ def league_matches_2026():
     against, and the only one in which those two events score below 100%.
     """
     return load_payload("league_matches_2026")
+
+
+@pytest.fixture(scope="session")
+def audit_2025():
+    """
+    The 2025 back catalogue as the coverage audit of 2026-08-12 saw it: the
+    Tier 1 events from the dataset's first match to the end of that year, and
+    the **full match list of every league that fell inside one of their
+    windows** — the shortlist the audit's pro match walk produced, each league
+    re-read in full, which is the pool the resolver actually ranked.
+
+    A shortlist rather than the whole year's leagues, unlike
+    `league_matches_2026`. So this does not show the date window doing the
+    excluding; what it holds is the answer, league by league, on the half-season
+    the 2026 fixture cannot speak for.
+
+    That half-season is the one with the nested event in it. FISSURE PLAYGROUND
+    2 ran entirely inside BLAST Slam IV's window, both are made of tracked
+    teams, and the nested one played *more* matches — so BLAST Slam IV's window
+    holds six candidates and is decided by window coverage alone.
+
+    Three of the fifteen leagues are here to be *dropped*: the walk saw enough
+    of the Ancients League, the European Pro League and the Snake Trophy to put
+    each inside a window, and each spans months once re-read in full. They are
+    what the confirmation pass is for, and the reason nothing may win on the
+    walk's own summary.
+
+    `known_team_ids` is the 50 teams in the dataset at 1,822 matches, which is
+    the state the audit ran against. `ledger` is the verdict on each shortlisted
+    league at that moment.
+    """
+    return load_payload("audit_2025")

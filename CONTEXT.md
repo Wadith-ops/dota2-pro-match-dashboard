@@ -121,7 +121,22 @@ The boundary is inclusive: matches are played on day one, so a gap on day one is
 
 **Awaiting resolution** — an event that has started, that the ledger does not yet map, and that began within the last year. These are the only events that cost API calls: they set how far back the run walks OpenDota's pro match list, and when there are none the resolver makes no OpenDota calls at all.
 
-The year is a **lookback horizon**, not a tidy-up. Liquipedia's calendar reaches back to 2005 and this project has never mapped most of it, so without a horizon every event ever held is awaiting resolution and the first run walks twenty years of pro matches. Auditing the back catalogue is a deliberate, separate pass.
+The year is a **lookback horizon**, not a tidy-up. Liquipedia's calendar reaches back to 2005 and this project has never mapped most of it, so without a horizon every event ever held is awaiting resolution and the first run walks twenty years of pro matches. Auditing the back catalogue is a deliberate, separate pass — the **coverage audit** below.
+
+**Coverage audit** — `audit_coverage.py`, run by hand. The resolver only ever looks at events it has *not* mapped, so every answer already on record goes untested; an audit re-derives a bounded period in full and reports what it finds. It writes `tier1_event` and never a verdict, for the same reason the resolver does not.
+
+Its period is **derived from the data**: from the day of the dataset's earliest match to today. An event that finished before the dataset began is *out of range*, not a gap — that is a different absence from either of the two above, and the audit never reports it as coverage this project is missing.
+
+**Audit finding** — what the audit says about one event, and the reason the answer turns on the **verdict** rather than on whether a league was found:
+
+- **Covered** — resolved to a league that is `active`. In the dataset.
+- **Untracked** — resolved to a league with no settled verdict. A tournament this project recognises and has never decided about; this is the queue, and it is the same queue as *awaiting a verdict*.
+- **Declined** — resolved to a league that is `rejected`. Not a fault; a decision on record. Reported anyway, because an audit is the one moment such a decision is worth reading again.
+- **Gap** — no candidate league at all, which is the *known gap* above.
+
+**Mismatch** — an event the ledger maps to one league and the audit resolves to another, or maps at all where the audit now resolves to nothing. It exists because the resolver never clears a mapping, so an answer from an older ranking survives untested for ever. A mismatch is reported for a human to read; nothing is rewritten on the strength of it.
+
+**Unlisted league** — the audit run the other way: a league being fetched that no Tier 1 event claims, either because nothing ever resolved to it or because it claims an event no longer on the list. A coverage list can be wrong in both directions and only one of them is visible from the calendar.
 
 Only the **rendered tournaments table** is authoritative. The same page carries a Timeline template that deliberately includes Tier 2 events by the listed organisers; reading it is what once classified FISSURE Universe Episode 8 as Tier 1 and 1win Essence II as not. Episodes 4 and 6 of that series *are* Tier 1 — the distinction is per event, not per series.
 

@@ -1865,6 +1865,405 @@ def awaiting_verdict(records):
 
 
 # %%
+# # Auditing the back catalogue
+#
+# The daily resolver looks forward. `events_awaiting_resolution` keeps only the
+# events that have started, are **not already mapped**, and opened inside the
+# lookback — which is the right shape for a job that runs every morning and
+# exactly the wrong shape for a question asked once. An audit's whole subject is
+# the answers already on record: five of the tracked leagues were chosen by hand
+# before any of this existed, and 2026 turned out to be missing two Tier 1 events
+# nobody had noticed for two months.
+#
+# So an audit re-resolves a **bounded period in full**, mapped or not, and then
+# runs the same check the other way. A coverage list can be wrong in both
+# directions and only one of them is visible from the calendar: a Tier 1 event
+# with no league is a gap the resolver already reports, while a league being
+# fetched that no Tier 1 event claims is invisible to it entirely.
+#
+# Nothing here decides anything. An audit that activated a league would be the
+# automatic import `tier1-pipeline-automation/14` rules out — what to cover is
+# Wade's call, and this report is what he reads before making it.
+
+# A Tier 1 event whose league is being fetched. Nothing to do.
+AUDIT_COVERED = "covered"
+# Resolved to a league with no settled verdict. This is the queue: a tournament
+# this project recognises and has never decided about.
+AUDIT_UNTRACKED = "untracked"
+# Resolved to a league that was considered and turned down. Not a fault — that
+# is what a verdict is *for* — but an audit is the one moment a decision on
+# record is worth reading again, so it is reported rather than passed over.
+AUDIT_DECLINED = "declined"
+# No candidate league at all. Either the event has no OpenDota data or the walk
+# never reached it; the audit says which by saying how far back it read.
+AUDIT_GAP = "gap"
+
+# The order the report reads them in: what needs doing first, what was already
+# settled last. An audit is read from the top.
+AUDIT_FINDINGS = (AUDIT_GAP, AUDIT_UNTRACKED, AUDIT_DECLINED, AUDIT_COVERED)
+
+# The reverse check's two answers: a tracked league that some Tier 1 event
+# claims, and one that none does.
+AUDIT_LISTED   = "listed"
+AUDIT_UNLISTED = "unlisted"
+
+
+def dataset_start_date(rows):
+    """
+    The day the dataset's earliest match was played, or None for no matches.
+
+    This is the audit's natural starting bound, and it is derived rather than
+    written down: an event that finished before the dataset began is outside
+    its intended range, not a coverage gap, and where that line falls is a fact
+    about the data rather than a constant somebody has to remember to move.
+    """
+    played = [row.get("start_time") for row in rows or []
+              if row.get("start_time") is not None]
+
+    if not played:
+        return None
+
+    return datetime.fromtimestamp(min(played), tz=timezone.utc).strftime("%Y-%m-%d")
+
+
+def events_in_range(events, opens, closes):
+    """
+    The events that **begin** inside a closed ISO date range, oldest first.
+
+    Start date rather than end date, for the same reason `events_in_year` uses
+    it: an event running from December into January belongs to the year it
+    opened in, which is the year its early matches carry in the dataset.
+
+    Both ends are inclusive. The range an audit is given is the span of the
+    dataset it is auditing, and the dataset's first match was played on its
+    first day — an exclusive bound would drop the very event the audit starts
+    from.
+    """
+    return sorted(
+        (
+            event for event in events or []
+            if event.get("start_date")
+            and opens <= event["start_date"] <= closes
+        ),
+        key=lambda event: event["start_date"],
+    )
+
+
+def audit_findings(resolutions, ledger):
+    """
+    One finding per resolution: what the resolver just worked out, what the
+    ledger already said, and whether those two agree.
+
+    The verdict is what parts `covered` from the rest, so the finding answers
+    the question the audit was asked — *is this tournament in the dataset?* —
+    rather than the question the resolver answers, which is only whether a
+    league could be found for it.
+
+    `mismatch` is the finding with no other home. The resolver writes its answer
+    onto the ledger and never clears one, so a mapping made a year ago by an
+    older ranking survives untested for ever; re-deriving it is most of the
+    point of an audit, and a mapping that no longer reproduces is worth a human
+    reading before anything is changed. A resolver that now finds *nothing* for
+    a mapped event counts too — the ledger claims an answer this run cannot
+    stand behind.
+
+    The winner's numbers come from the winning candidate's **own** row.
+    `candidates` is ranked rather than keyed, so `candidates[0]` is the winner
+    only by coincidence of ordering.
+    """
+    verdicts = {
+        entry.get("league_id"): entry.get("verdict")
+        for entry in ledger_entries(ledger)
+    }
+    recorded = {
+        entry["tier1_event"]: entry.get("league_id")
+        for entry in ledger_entries(ledger)
+        if entry.get("tier1_event")
+    }
+
+    findings = []
+
+    for resolution in resolutions or []:
+        league_id  = resolution.get("league_id")
+        verdict    = verdicts.get(league_id) if league_id is not None else None
+        candidates = resolution.get("candidates") or []
+
+        if league_id is None:
+            finding = AUDIT_GAP
+        elif verdict == LEDGER_ACTIVE:
+            finding = AUDIT_COVERED
+        elif verdict == LEDGER_REJECTED:
+            finding = AUDIT_DECLINED
+        else:
+            finding = AUDIT_UNTRACKED
+
+        winner = next(
+            (candidate for candidate in candidates
+             if candidate.get("league_id") == league_id),
+            {},
+        )
+        claimed = recorded.get(resolution.get("event"))
+
+        findings.append({
+            "event"           : resolution.get("event"),
+            "start_date"      : resolution.get("start_date"),
+            "end_date"        : resolution.get("end_date"),
+            "finding"         : finding,
+            "league_id"       : league_id,
+            "league_name"     : resolution.get("league_name"),
+            "verdict"         : verdict,
+            "match_count"     : winner.get("match_count"),
+            "overlap"         : winner.get("overlap"),
+            "coverage"        : winner.get("coverage"),
+            "ambiguous"       : bool(resolution.get("ambiguous")),
+            "candidates"      : candidates,
+            "ledger_league_id": claimed,
+            "mismatch"        : claimed is not None and claimed != league_id,
+        })
+
+    return findings
+
+
+def audit_tracked_leagues(ledger, events):
+    """
+    The audit run the other way: every league being fetched, and whether any
+    Tier 1 event claims it.
+
+    A league is `listed` when its `tier1_event` names an event on the calendar.
+    Two things make it `unlisted`, and they are different news, so each carries
+    its reason: a league nothing has ever resolved to, and a league claiming an
+    event the calendar no longer holds. The first is the ordinary case for a
+    tournament added by hand before the resolver existed, or for one that has
+    not played a match yet. The second means the mapping is stale — Liquipedia
+    renamed the event, or it was never on the Tier 1 list at all.
+
+    `events` is the **whole** calendar, not the audited slice. Handing it one
+    year would report every league from every other year as unlisted, which is
+    the audit accusing itself of the thing it is checking for.
+
+    Only `active` leagues are examined. A rejected league that no event claims
+    is not a finding — it is ten thousand of them.
+    """
+    listed = {event.get("name") for event in events or [] if event.get("name")}
+
+    tracked = []
+
+    for entry in ledger_entries(ledger):
+        if entry.get("verdict") != LEDGER_ACTIVE:
+            continue
+
+        event_name = entry.get("tier1_event")
+
+        if event_name and event_name in listed:
+            finding, reason = AUDIT_LISTED, ""
+        elif event_name:
+            finding = AUDIT_UNLISTED
+            reason  = f"claims '{event_name}', which is not on the Tier 1 list"
+        else:
+            finding = AUDIT_UNLISTED
+            reason  = "no Tier 1 event resolved to it"
+
+        tracked.append({
+            "league_id"  : entry.get("league_id"),
+            "name"       : entry.get("name"),
+            "tier1_event": event_name,
+            "finding"    : finding,
+            "reason"     : reason,
+        })
+
+    return tracked
+
+
+def audit_totals(findings, tracked):
+    """How many of each finding, in one dict — the audit's headline."""
+    totals = {finding: 0 for finding in AUDIT_FINDINGS}
+
+    for record in findings or []:
+        totals[record["finding"]] = totals.get(record["finding"], 0) + 1
+
+    totals["events"]    = len(findings or [])
+    totals["ambiguous"] = sum(1 for record in findings or []
+                              if record.get("ambiguous"))
+    totals["mismatch"]  = sum(1 for record in findings or []
+                              if record.get("mismatch"))
+    totals["tracked"]   = len(tracked or [])
+    totals["unlisted"]  = sum(1 for record in tracked or []
+                              if record["finding"] == AUDIT_UNLISTED)
+
+    return totals
+
+
+# The event column. Wide, because a Tier 1 event's name is the only thing in
+# these rows a human recognises without looking anything up.
+_AUDIT_EVENT = 38
+
+
+def _audit_window(record):
+    """`2025-10-14 – 2025-11-09`, or `dates TBD` for an event with none."""
+    if not record.get("start_date") or not record.get("end_date"):
+        return "dates TBD"
+
+    return f"{record['start_date']} – {record['end_date']}"
+
+
+def _audit_row(record, tail):
+    """One event's line: name, window, then whatever that section is showing."""
+    return (f"    {str(record.get('event'))[:_AUDIT_EVENT - 1]:<{_AUDIT_EVENT}}"
+            f"{_audit_window(record):<26}{tail}")
+
+
+def _audit_section(heading, lines):
+    """
+    A heading and its rows, or a heading and `(none)`.
+
+    Empty sections are printed rather than skipped. "We looked and found none"
+    is the answer an audit exists to give, and a section that vanishes when it
+    is empty cannot tell that apart from a section nobody ran.
+    """
+    return [f"  {heading}"] + (lines or ["    (none)"])
+
+
+def _audit_candidates(record):
+    """The ranked candidates under a contested window, winner marked."""
+    return [
+        f"      {'won ' if position == 0 else '    '} "
+        f"{candidate['league_id']:>6}  {candidate['overlap'] * 100:5.1f}% teams  "
+        f"{candidate['coverage'] * 100:5.1f}% window  "
+        f"{candidate['match_count']:>4}m  {candidate.get('name')}"
+        for position, candidate in enumerate(record.get("candidates") or [])
+    ]
+
+
+def format_audit_report(findings, tracked, opens=None, closes=None):
+    """
+    The audit as a human reads it: the headline, then one section per finding,
+    worst first.
+
+    The sections are the decisions. A gap and a league awaiting a verdict are
+    both "this tournament is not in the dataset" and they need opposite things
+    done about them — one is a hole in OpenDota's data, the other is a merge —
+    so they are never pooled into a single count of missing tournaments.
+    """
+    totals = audit_totals(findings, tracked)
+    period = (f" — {opens} to {closes}" if opens and closes else "")
+
+    if not findings:
+        # Never "nothing is missing". No events audited means the calendar or
+        # the range produced none, and reporting that as a clean bill of health
+        # is the one thing this report must not do.
+        return (f"Tier 1 coverage audit{period}\n"
+                f"  No Tier 1 events fall inside this range — nothing was checked")
+
+    by_finding = {
+        finding: [record for record in findings if record["finding"] == finding]
+        for finding in AUDIT_FINDINGS
+    }
+
+    lines = [
+        f"Tier 1 coverage audit{period}",
+        f"  {_plural(totals['events'], 'event')} audited: "
+        f"{totals[AUDIT_COVERED]} covered, "
+        f"{totals[AUDIT_UNTRACKED]} awaiting a verdict, "
+        f"{totals[AUDIT_DECLINED]} declined, "
+        f"{totals[AUDIT_GAP]} with no league at all",
+        "",
+    ]
+
+    lines += _audit_section("No OpenDota league at all", [
+        _audit_row(record, "no candidate league")
+        for record in by_finding[AUDIT_GAP]
+    ]) + [""]
+
+    lines += _audit_section(
+        "Resolved to a league nobody has judged — a coverage decision",
+        [
+            line
+            for record in by_finding[AUDIT_UNTRACKED]
+            for line in (
+                _audit_row(record,
+                           f"{record['league_id']:>6}  "
+                           f"{record['match_count'] or 0:>4}m  "
+                           f"{(record['overlap'] or 0) * 100:5.1f}% teams  "
+                           f"verdict: {record['verdict'] or 'unrecorded'}"),
+                f"      {record['league_name']}",
+            )
+        ],
+    ) + [""]
+
+    lines += _audit_section(
+        "Considered and turned down — reported so the decision can be reread",
+        [
+            _audit_row(record,
+                       f"{record['league_id']:>6}  "
+                       f"{record['match_count'] or 0:>4}m  {record['league_name']}")
+            for record in by_finding[AUDIT_DECLINED]
+        ],
+    ) + [""]
+
+    lines += _audit_section("Contested windows — the resolver judged rather "
+                            "than found", [
+        line
+        for record in findings if record["ambiguous"]
+        for line in [_audit_row(record, f"{len(record['candidates'])} candidates")]
+                    + _audit_candidates(record)
+    ]) + [""]
+
+    lines += _audit_section(
+        "The ledger and this run disagree", [
+            _audit_row(record,
+                       f"ledger says {record['ledger_league_id']}, "
+                       f"this run says {record['league_id'] or 'no league'}")
+            for record in findings if record["mismatch"]
+        ],
+    ) + [""]
+
+    lines += _audit_section(
+        f"Tracked leagues no Tier 1 event claims "
+        f"({totals['unlisted']} of {_plural(totals['tracked'], 'league')})", [
+            f"    {record['league_id']:>6}  {record['name']} — {record['reason']}"
+            for record in tracked or []
+            if record["finding"] == AUDIT_UNLISTED
+        ],
+    ) + [""]
+
+    lines += _audit_section("Covered by an active league", [
+        _audit_row(record, f"{record['league_id']:>6}  "
+                           f"{record['match_count'] or 0:>4}m")
+        for record in by_finding[AUDIT_COVERED]
+    ])
+
+    return "\n".join(lines)
+
+
+def format_audit_next_steps(findings):
+    """
+    The decisions the audit leaves behind, each spelled out as the edit that
+    makes it.
+
+    Deliberately not a diff and deliberately not applied. Turning a verdict is
+    the one thing in this whole file that changes what gets fetched, and it
+    stays a human's edit: an audit that activated a league would be the
+    automatic import `tier1-pipeline-automation/14` rules out. A gap is not
+    here either — there is no league to approve.
+    """
+    waiting = [record for record in findings or []
+               if record["finding"] == AUDIT_UNTRACKED]
+
+    if not waiting:
+        return "Nothing is waiting on a decision."
+
+    return "\n".join([
+        "To cover a tournament, set its verdict in data/leagues.json to "
+        "'active' and re-run the pipeline:",
+    ] + [
+        f"  league {record['league_id']:>6}  {record['league_name']}  "
+        f"— {record['event']}, {record['match_count'] or 0} matches, "
+        f"{record['start_date']} to {record['end_date']}"
+        for record in waiting
+    ])
+
+
+# %%
 # # What a run says it did
 #
 # The scheduled job's only record of a pipeline run was the last line of its

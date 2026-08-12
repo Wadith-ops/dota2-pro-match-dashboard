@@ -723,7 +723,8 @@ class TestWhichEventsAreStillWorthLooking:
         # mapped most of it. Without the horizon the first run walks twenty
         # years of pro matches — and the run after it walks back to the oldest
         # thing it still could not resolve, every day, forever. Auditing the
-        # back catalogue is a deliberate separate pass, issue 14.
+        # back catalogue is a deliberate separate pass — `audit_coverage.py`,
+        # which takes its period on the command line and is not scheduled.
         awaiting = events_awaiting_resolution(
             [event("The International 2013", "2013-08-02", "2013-08-11")],
             {},
