@@ -105,6 +105,10 @@ def transport(monkeypatch):
         def get(self, url, **kwargs):
             self.urls.append(url)
             answer = self.answers.pop(0) if self.answers else 200
+
+            if isinstance(answer, Exception):
+                raise answer
+
             return Response(answer)
 
     stub = Stub()
@@ -164,6 +168,57 @@ class TestTheFetcherUsesTheKey:
         pipeline.fetch_url(f"{OPENDOTA}/matches/123")
 
         assert "secret" not in capsys.readouterr().out
+
+    def test_a_dropped_connection_is_reported_without_the_key(
+        self, transport, monkeypatch, capsys
+    ):
+        # `requests` embeds the URL it was *given* in the text of what it
+        # raises, so reporting `url` rather than `requested` is not enough on
+        # its own. The scheduled job tees its output to a file it uploads as an
+        # artifact, and that copy is written before GitHub masks anything.
+        monkeypatch.setattr(pipeline, "OPENDOTA_API_KEY", "secret")
+        transport.answers = [requests.ConnectionError(
+            "HTTPSConnectionPool(host='api.opendota.com', port=443): Max "
+            "retries exceeded with url: /api/matches/123?api_key=secret"
+        ), 200]
+
+        pipeline.fetch_url(f"{OPENDOTA}/matches/123")
+
+        printed = capsys.readouterr().out
+        assert "secret" not in printed
+        assert "api_key=<redacted>" in printed
+
+    def test_an_unexpected_error_is_reported_without_the_key(
+        self, monkeypatch, capsys
+    ):
+        monkeypatch.setattr(pipeline, "OPENDOTA_API_KEY", "secret")
+
+        def explode(url, **kwargs):
+            raise RuntimeError(f"nobody anticipated {url}")
+
+        monkeypatch.setattr(requests, "get", explode)
+
+        pipeline.fetch_url(f"{OPENDOTA}/matches/123")
+
+        assert "secret" not in capsys.readouterr().out
+
+
+class TestRedactingTheKey:
+    def test_the_value_goes_and_the_parameter_stays(self):
+        assert core.without_api_key("...url: /api/x?api_key=abc123") == \
+            "...url: /api/x?api_key=<redacted>"
+
+    def test_a_parameter_after_it_survives(self):
+        assert core.without_api_key("?api_key=abc&less_than_match_id=9") == \
+            "?api_key=<redacted>&less_than_match_id=9"
+
+    def test_an_escaped_key_goes_too(self):
+        # By pattern rather than by knowing the key, so a URL-escaped one and a
+        # key this process never saw are both covered.
+        assert "a%20b" not in core.without_api_key("?api_key=a%20b)")
+
+    def test_text_with_no_key_in_it_is_untouched(self):
+        assert core.without_api_key("connection reset") == "connection reset"
 
 
 # ── Running without the machine's own state ───────────────────────────────────
@@ -265,6 +320,19 @@ class TestTheShellRecoversTheCheckpointOnlyWhenItHasTo:
     def test_a_first_run_anywhere_has_nothing_to_rebuild_from(self):
         assert pipeline.fetched_checkpoint(at("2026-08-14 00:00")) == set()
 
+    def test_what_was_rebuilt_is_written_back(self, store):
+        # Otherwise nothing writes it: the checkpoint is saved by
+        # `run_pipeline`'s flush, and a run that fetches no new matches never
+        # flushes — so a runner would re-parse the whole 37 MB store every run
+        # and cache a `checkpoints/` directory with no checkpoint in it.
+        (store / "matches_standard.jsonl").write_text(
+            json.dumps(stored(1, 1_700_000_000)) + "\n", encoding="utf-8"
+        )
+
+        pipeline.fetched_checkpoint(at("2026-08-14 00:00"))
+
+        assert pipeline.load_checkpoint(pipeline.MATCH_CHECKPOINT) == {1}
+
 
 # ── The resolver's daily gate ─────────────────────────────────────────────────
 
@@ -330,10 +398,12 @@ class TestTheMarkerSurvivesBetweenRuns:
         # behind it costs a 259-page walk, so what is asserted here is how many
         # times that work is reached.
         ran = []
-        monkeypatch.setattr(
-            pipeline, "resolve_tier1_leagues",
-            lambda ledger, api_leagues, teams, now: ran.append(now)
-        )
+
+        def resolved(ledger, api_leagues, teams, now):
+            ran.append(now)
+            return True
+
+        monkeypatch.setattr(pipeline, "resolve_tier1_leagues", resolved)
 
         morning   = at("2026-08-14 02:00")
         midday    = at("2026-08-14 14:00")
@@ -349,13 +419,35 @@ class TestTheMarkerSurvivesBetweenRuns:
         # the same in a log, which is the confusion this whole project keeps
         # paying for.
         monkeypatch.setattr(pipeline, "resolve_tier1_leagues",
-                            lambda *args: None)
+                            lambda *args: True)
         pipeline.resolve_if_due({}, [], set(), at("2026-08-14 02:00"))
 
         capsys.readouterr()
         pipeline.resolve_if_due({}, [], set(), at("2026-08-14 14:00"))
 
         assert "2026-08-14" in capsys.readouterr().out
+
+    def test_a_resolver_that_could_not_ask_does_not_spend_the_day(
+        self, monkeypatch
+    ):
+        # The failure paths inside `resolve_tier1_leagues` return normally: no
+        # league list this run, or a walk that read no pro matches. Recording
+        # the day there would let one failed `/leagues` fetch stand the
+        # resolver down until tomorrow — and a tournament starting today would
+        # be recognised a day late, which is what ADR-0009 exists to prevent.
+        ran = []
+
+        def could_not_ask(ledger, api_leagues, teams, now):
+            ran.append(now)
+            return False
+
+        monkeypatch.setattr(pipeline, "resolve_tier1_leagues", could_not_ask)
+
+        pipeline.resolve_if_due({}, None, set(), at("2026-08-14 02:00"))
+        pipeline.resolve_if_due({}, None, set(), at("2026-08-14 08:00"))
+
+        assert len(ran) == 2
+        assert pipeline.read_last_resolution() is None
 
     def test_deleting_the_marker_is_how_a_run_is_forced(self, marker):
         # There is no flag for this on purpose. Removing a checkpoint to make

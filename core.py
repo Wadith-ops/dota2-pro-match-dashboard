@@ -289,37 +289,49 @@ def flatten_objectives(objectives):
 # transform, and because both of them need to apply it to the *same* text to
 # answer a second question — whether the working copy of `dashboard.py` differs
 # from the committed one in anything but this line. See `auto_update.py`.
+#
+# The marker carries a **time as well as a date**, and the time is not decoration.
+# The job ran once a day until issue 13 and runs every six hours now, so a
+# date-only marker is unchanged on three runs in four — and a push whose only
+# change is data files is exactly the push Streamlit does not reliably redeploy
+# on. Matches fetched at 06:17 would wait for tomorrow. The time part is optional
+# in the pattern so a file still carrying the old form is upgraded in place
+# rather than missed.
 
-DATA_DATE_COMMENT = re.compile(r"^# data: \d{4}-\d{2}-\d{2}", re.MULTILINE)
+DATA_DATE_COMMENT = re.compile(
+    r"^# data: \d{4}-\d{2}-\d{2}(?: \d{2}:\d{2})?", re.MULTILINE
+)
 
 
-def bump_data_date(text, day):
+def bump_data_date(text, stamp):
     """
-    `dashboard.py` with its `# data:` comment set to `day`, an ISO date string.
+    `dashboard.py` with its `# data:` comment set to `stamp` — a date, or a date
+    and a time.
 
     Returns the text unchanged when there is no such comment, which the caller
     is expected to notice: without the marker a data-only push may not redeploy
     at all.
     """
-    return DATA_DATE_COMMENT.sub(f"# data: {day}", text)
+    return DATA_DATE_COMMENT.sub(f"# data: {stamp}", text)
 
 
-def same_but_for_the_data_date(committed, working, day="0000-00-00"):
+def same_but_for_the_data_date(committed, working, stamp="0000-00-00"):
     """
     Whether two versions of `dashboard.py` differ in nothing but the `# data:`
     line — which is the question "has anybody edited this file since it was last
     committed, other than a push that bumped the marker?"
 
-    Both sides get the same date written into them and are then compared whole,
-    so the marker cannot decide the answer either way. `day` is arbitrary and
-    never appears in the result.
+    Both sides get the same marker written into them and are then compared
+    whole, so the marker cannot decide the answer either way — including when
+    the two sides carry different *forms* of it, a bare date on one and a date
+    and time on the other. `stamp` is arbitrary and never appears in the result.
 
     Line endings are normalised first. On Windows the blob is stored with LF and
     checked out with CRLF, so a raw comparison is False for every file in the
     repository — a guard that answers "edited" always is a guard that is off.
     """
     def normalised(text):
-        return bump_data_date(text.replace("\r\n", "\n"), day)
+        return bump_data_date((text or "").replace("\r\n", "\n"), stamp)
 
     return normalised(committed) == normalised(working)
 
@@ -338,6 +350,25 @@ def same_but_for_the_data_date(committed, working, day="0000-00-00"):
 # rather than a no-op, so the base is checked rather than assumed.
 
 API_KEY_PARAM = "api_key"
+
+# What a printed line must never contain. `fetch_url` reports the URL the caller
+# asked for rather than the one it requested, but that is not enough on its own:
+# `requests` embeds the URL it was *given* in the text of the exception it
+# raises, so a dropped connection prints the key on its way past. GitHub masks a
+# recognised secret in the rendered log, and the scheduled job also tees its
+# output to a file it uploads as an artifact — which is written before any
+# masking happens.
+_API_KEY_IN_TEXT = re.compile(rf"({API_KEY_PARAM}=)[^&\s)\"']*")
+
+
+def without_api_key(text):
+    """
+    `text` with the value of any `api_key=` parameter taken out of it.
+
+    By pattern rather than by knowing the key, so it holds for a URL-escaped
+    key, a key this process never saw, and a second parameter added later.
+    """
+    return _API_KEY_IN_TEXT.sub(r"\1<redacted>", str(text))
 
 
 def keyed_url(url, api_key, api_base):

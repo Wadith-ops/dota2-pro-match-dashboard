@@ -18,11 +18,20 @@ import core
 
 HERE = Path(__file__).parent
 DASHBOARD = HERE / "dashboard.py"
-DATE = datetime.now().strftime("%Y-%m-%d")
+NOW = datetime.now()
+DATE = NOW.strftime("%Y-%m-%d")
+# The marker carries a time as well: `auto_update.py` runs every six hours, so a
+# date-only marker is unchanged on most pushes — and a push that changes no `.py`
+# file is one Streamlit may not redeploy on. Both writers use the same form.
+STAMP = NOW.strftime("%Y-%m-%d %H:%M")
 
 
 def run(cmd):
-    result = subprocess.run(cmd, cwd=HERE, capture_output=True, text=True)
+    # UTF-8 explicitly: `text=True` alone decodes with the locale's encoding,
+    # which is cp1252 here, and git output carrying an em dash then raises
+    # inside subprocess's reader thread rather than coming back as text.
+    result = subprocess.run(cmd, cwd=HERE, capture_output=True, text=True,
+                            encoding="utf-8", errors="replace")
     if result.returncode != 0:
         print(f"FAILED: {' '.join(cmd)}\n{result.stderr}")
         sys.exit(1)
@@ -31,10 +40,10 @@ def run(cmd):
 
 # Bump the date comment in dashboard.py
 DASHBOARD.write_text(
-    core.bump_data_date(DASHBOARD.read_text(encoding="utf-8"), DATE),
+    core.bump_data_date(DASHBOARD.read_text(encoding="utf-8"), STAMP),
     encoding="utf-8",
 )
-print(f"Bumped dashboard.py date to {DATE}")
+print(f"Bumped dashboard.py to {STAMP}")
 
 # Commit and push.
 # Only stage what exists: `git add` exits 128 on a pathspec matching no file,
@@ -65,7 +74,9 @@ DEPLOYED = [
 present = [p for p in DEPLOYED if (HERE / p).exists()]
 run(["git", "add", *present])
 run(["git", "commit", "-m", f"data: update matches ({DATE})"])
-# Commit, then pull, then push: `git pull --rebase` refuses a dirty tree.
-run(["git", "pull", "--rebase", "origin", "master"])
+# Commit, then pull, then push. `--autostash` because `git pull --rebase`
+# refuses outright when any tracked file is unstaged, and this is run by hand
+# from a working tree that routinely has work in progress in it.
+run(["git", "pull", "--rebase", "--autostash", "origin", "master"])
 run(["git", "push", "origin", "master"])
 print("Pushed — Streamlit Cloud will redeploy automatically.")

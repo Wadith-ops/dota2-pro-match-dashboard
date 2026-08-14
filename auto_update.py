@@ -55,7 +55,18 @@ def log(msg):
 
 
 def run(cmd, check=True):
-    result = subprocess.run(cmd, cwd=HERE, capture_output=True, text=True)
+    """
+    Runs a command and returns the result. **UTF-8, explicitly.**
+
+    `text=True` alone decodes with the locale's preferred encoding, which is
+    cp1252 on this workstation — and `dashboard.py` has em dashes in it, so
+    `git show HEAD:dashboard.py` raises `UnicodeDecodeError` inside subprocess's
+    reader thread, hands back a `stdout` of None, and takes the run down with an
+    AttributeError. Every file in this repository is UTF-8; `errors` keeps a
+    stray byte in a git *message* from doing the same thing.
+    """
+    result = subprocess.run(cmd, cwd=HERE, capture_output=True, text=True,
+                            encoding="utf-8", errors="replace")
     if check and result.returncode != 0:
         log(f"FAILED: {' '.join(str(c) for c in cmd)}\n{result.stderr}")
         sys.exit(1)
@@ -99,10 +110,10 @@ def what_changed():
                check=False).stdout.strip()
 
 
-def bump_dashboard(day):
+def bump_dashboard(stamp):
     """
-    Moves the `# data:` comment in `dashboard.py` to `day` and says whether the
-    file may be pushed.
+    Moves the `# data:` comment in `dashboard.py` to `stamp` and says whether
+    the file may be pushed.
 
     Streamlit Cloud does not reliably redeploy on a push that changes only data
     files, so the marker is what makes the new CSV visible. The `ttl` on
@@ -131,15 +142,19 @@ def bump_dashboard(day):
             "dashboard.py is pushed by hand.")
         return False
 
-    bumped = core.bump_data_date(working, day)
+    bumped = core.bump_data_date(working, stamp)
 
-    if bumped == working and f"# data: {day}" not in working:
-        log("dashboard.py carries no '# data:' comment — nothing to bump, and "
-            "Streamlit may not redeploy on a data-only push.")
+    if bumped == working:
+        # Either there is no marker, or it already reads exactly this. The
+        # marker carries a time, so the second is a run in the same minute as
+        # the last one — and either way this push changes no `.py` file, which
+        # is the case Streamlit may not redeploy on.
+        log("dashboard.py's '# data:' comment did not move — Streamlit may not "
+            "redeploy on a push that changes only data files.")
         return False
 
     DASHBOARD.write_text(bumped, encoding="utf-8")
-    log(f"Bumped dashboard.py date to {day}")
+    log(f"Bumped dashboard.py to {stamp}")
     return True
 
 
@@ -150,9 +165,15 @@ def commit_and_push(paths, day):
     The pull is not optional any more. Until issue 13 there was one writer;
     there are now two — the runner every six hours, and the workstation by hand
     — so a remote ahead of local is an ordinary Tuesday rather than a fault. The
-    order is commit, then pull, then push, because `git pull --rebase` refuses a
-    dirty tree and the run's own work has to be a commit before the remote's can
-    be rebased under it.
+    order is commit, then pull, then push, because the run's own work has to be
+    a commit before the remote's can be rebased under it.
+
+    `--autostash` is load-bearing rather than tidy. `git pull --rebase` refuses
+    outright — before it even fetches — when *any* tracked file is unstaged, and
+    this run deliberately creates that state: `bump_dashboard` leaves an edited
+    `dashboard.py` alone and promises the data still gets pushed. Without the
+    autostash that promise is false, and running `push_data.py` by hand with any
+    work in progress in the tree would fail too.
 
     A conflict here fails the run, which is right: the files that could conflict
     are the data files, and the resolution for those is to run the pipeline
@@ -160,7 +181,7 @@ def commit_and_push(paths, day):
     """
     run(["git", "add", *paths])
     run(["git", "commit", "-m", f"data: auto-update matches ({day})"])
-    run(["git", "pull", "--rebase", "origin", "master"])
+    run(["git", "pull", "--rebase", "--autostash", "origin", "master"])
     run(["git", "push", "origin", "master"])
 
 
@@ -178,13 +199,18 @@ def main():
 
     log(f"Changed: {changed}")
 
-    day = datetime.now().strftime("%Y-%m-%d")
+    now = datetime.now()
+    day = now.strftime("%Y-%m-%d")
 
     # Only stage what exists — `git add` exits 128 on a pathspec matching no
     # file, which would abort the run with the tree already dirtied.
     paths = [path for path in DEPLOYED if (HERE / path).exists()]
 
-    if bump_dashboard(day):
+    # The marker carries the time as well as the day: this job runs every six
+    # hours now, and a date-only marker would be unchanged on three runs in
+    # four — leaving three of every four data pushes with no `.py` change to
+    # make Streamlit redeploy on.
+    if bump_dashboard(now.strftime("%Y-%m-%d %H:%M")):
         paths.append("dashboard.py")
 
     commit_and_push(paths, day)

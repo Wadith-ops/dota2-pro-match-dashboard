@@ -64,6 +64,7 @@ from core import (
     suspect_reasons,
     tier1_resolution_state,
     verdict_counts,
+    without_api_key,
 )
 
 # %%
@@ -453,8 +454,11 @@ def fetch_url(url, retry_policy=None):
 
     The API key is added here and **nowhere is it printed**. Every message below
     reports `url`, the one the caller asked for, rather than `requested`, the one
-    with the credential on it: the Actions log of a public repository is public,
-    and a secret that was never written needs no masking.
+    with the credential on it — and the text of an exception goes through
+    `core.without_api_key`, because `requests` embeds the URL it was given in
+    what it raises. The Actions log of a public repository is public, the
+    scheduled job uploads its own copy of that log as an artifact, and a secret
+    that was never written needs no masking.
     """
     policy    = retry_pause if retry_policy is None else retry_policy
     requested = keyed_url(url, OPENDOTA_API_KEY, BASE_URL)
@@ -480,10 +484,11 @@ def fetch_url(url, retry_policy=None):
         except requests.RequestException as error:
             # `status` is still None here, which is what tells the policy that
             # nothing above the network answered at all.
-            print(f"  Error fetching {url}: {error}")
+            print(f"  Error fetching {url}: {without_api_key(error)}")
 
         except Exception as error:
-            print(f"  Unexpected error fetching {url}: {error!r}")
+            print(f"  Unexpected error fetching {url}: "
+                  f"{without_api_key(repr(error))}")
             return None
 
         pause = policy(status, attempt)
@@ -842,6 +847,13 @@ def resolve_tier1_leagues(ledger, api_leagues, known_teams, now):
     awaiting    = events_awaiting_resolution(events, ledger, now.date())
     resolutions = []
 
+    # Whether this run actually put the question, which is not the same as
+    # whether it found anything. `resolve_if_due` records the day only when this
+    # is True, so a run that could not ask must not spend the day's one attempt
+    # — otherwise a single failed `/leagues` fetch stands down the resolver
+    # until tomorrow, and a tournament starting today is recognised a day late.
+    asked = True
+
     if not awaiting:
         print("  Every Tier 1 event under way already maps to a league")
 
@@ -850,6 +862,7 @@ def resolve_tier1_leagues(ledger, api_leagues, known_teams, now):
         # cannot be told from the tournament, and every such window would be
         # reported ambiguous. Skipping is the honest answer; guessing is not.
         print("  No league list this run — resolution skipped")
+        asked = False
 
     else:
         print(f"  {len(awaiting)} event(s) awaiting resolution: "
@@ -876,7 +889,11 @@ def resolve_tier1_leagues(ledger, api_leagues, known_teams, now):
         reached = min(played) if played else None
 
         if reached is None:
+            # The walk read nothing at all — a refused request, not an empty
+            # answer. Nothing can resolve, and the next run should try again
+            # rather than treat today as spent.
             print("  Read no pro matches — nothing can resolve this run")
+            asked = False
         else:
             print(f"  Read {len(pro_matches)} pro matches back to "
                   f"{datetime.fromtimestamp(reached, tz=timezone.utc):%Y-%m-%d}")
@@ -950,6 +967,8 @@ def resolve_tier1_leagues(ledger, api_leagues, known_teams, now):
     write_resolution(records, now, previous)
     print("=" * 60)
 
+    return asked
+
 
 def resolve_if_due(ledger, api_leagues, known_teams, now):
     """
@@ -966,6 +985,14 @@ def resolve_if_due(ledger, api_leagues, known_teams, now):
     Gating it costs nothing in outcome. `core.resolution_due` explains why the
     day is the right grain; the marker it reads is machine state, so a runner
     that lost its cache resolves once more than it needed to.
+
+    **The day is recorded only when the resolver could actually put the
+    question.** A run that skipped for want of a league list, or whose walk read
+    no pro matches, has not spent the day's attempt — recording it there would
+    let one failed fetch stand the resolver down until tomorrow, and a
+    tournament starting today would be recognised a day late. That is exactly
+    what ADR-0009 exists to prevent, and it is the direction `core.resolution_due`
+    already fails in.
     """
     today = now.date().isoformat()
 
@@ -973,8 +1000,10 @@ def resolve_if_due(ledger, api_leagues, known_teams, now):
         print(f"Tier 1 resolution already ran today ({today}) — skipped")
         return
 
-    resolve_tier1_leagues(ledger, api_leagues, known_teams, now)
-    record_resolution_run(today)
+    if resolve_tier1_leagues(ledger, api_leagues, known_teams, now):
+        record_resolution_run(today)
+    else:
+        print("Tier 1 resolution could not run — the next run will try again")
 
 
 # %%
@@ -1003,6 +1032,12 @@ def fetched_checkpoint(now):
     The file wins when it exists, because it is the cheaper answer to the same
     question: rebuilding parses the whole store, which this run will do again at
     the end to build the CSV.
+
+    **What is rebuilt is written back**, which is what makes this a recovery
+    rather than a workaround. Nothing else would: the checkpoint is saved by
+    `run_pipeline`'s `flush()`, and a run that fetches no new matches never
+    flushes — so a runner would parse the whole store on every run forever and
+    cache a `checkpoints/` directory with no checkpoint in it.
     """
     fetched = load_checkpoint(MATCH_CHECKPOINT)
 
@@ -1014,6 +1049,7 @@ def fetched_checkpoint(now):
     if rebuilt:
         print(f"No match checkpoint — recovered {len(rebuilt)} fetched "
               f"match ids from the Standard store")
+        save_checkpoint(MATCH_CHECKPOINT, rebuilt)
 
     return rebuilt
 
