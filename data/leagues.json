@@ -15,7 +15,7 @@
     {"league_id": 19435, "name": "PGL Wallachia 2026 Season 7", "tier1_event": "PGL Wallachia Season 7", "verdict": "active"},
     {"league_id": 19543, "name": "PGL Wallachia 2026 Season 8", "tier1_event": "PGL Wallachia Season 8", "verdict": "active"},
     {"league_id": 19696, "name": "DreamLeague Season 29", "tier1_event": "DreamLeague Season 29", "verdict": "active"},
-    {"league_id": 19719, "name": "The International 2026", "tier1_event": null, "verdict": "active"},
+    {"league_id": 19719, "name": "The International 2026", "tier1_event": "The International 2026", "verdict": "active"},
     {"league_id": 19785, "name": "Esports World Cup 2026", "tier1_event": "Esports World Cup 2026", "verdict": "active"},
     {"league_id": 20009, "name": "1win Essence II", "tier1_event": "1win Essence II", "verdict": "active"},
     {"league_id": 2, "name": "Wild Cards West", "tier1_event": null, "verdict": "rejected"},
@@ -10056,6 +10056,16 @@
     {"league_id": 20099, "name": "lsesports.ru x MirrorShard", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20100, "name": "The Goonternational 2026", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20101, "name": "Meet Many Retards", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20102, "name": "Meet Many Retards", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20102, "name": "Meet Many Retards", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20106, "name": "NEXUS SERIES I", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20107, "name": "Contal AllStars #2", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20113, "name": "NEXUS SERIES III", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20114, "name": "Greed Or Feed", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20115, "name": "The Kiriyeshkinal II", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20104, "name": "DOZOR TOURNAMENT 6(7)", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20110, "name": "The Interlocal Summer 2026", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20112, "name": "NEXUS SERIES II", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20108, "name": "Goat Dota League", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20109, "name": "The Interlocal Summer 2026", "tier1_event": null, "verdict": "pending"}
   ]
 }
