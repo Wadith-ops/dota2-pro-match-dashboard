@@ -230,8 +230,13 @@ class TestARunSaysWhetherItFinished:
     """
 
     @pytest.fixture
-    def stubbed_main(self, monkeypatch):
+    def stubbed_main(self, monkeypatch, tmp_path):
         """Every step of `main()` replaced. No network, no files, no CSV."""
+        # Including the resolver's daily marker. `main()` writes it, and a run
+        # writing into the working copy's own `checkpoints/` would switch the
+        # resolver off for the rest of the day on the machine running the tests.
+        monkeypatch.setattr(pipeline, "RESOLUTION_CHECKPOINT",
+                            str(tmp_path / "last_resolution.json"))
         monkeypatch.setattr(pipeline, "ensure_directories", lambda: None)
         monkeypatch.setattr(pipeline, "backfill_standard_store", lambda: None)
         monkeypatch.setattr(pipeline, "get_patch_map", lambda: {})

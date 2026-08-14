@@ -1,0 +1,133 @@
+# The scheduled pipeline run, which used to be a Windows scheduled task on one
+# workstation. See `.scratch/tier1-pipeline-automation/13`.
+#
+# Two things about this job are load-bearing and easy to undo by accident:
+#
+# - **It is the only writer of `master` that runs unattended.** The workstation's
+#   `Dota2DataUpdate` task is retired; `push_data.py` by hand is the other
+#   writer, and `auto_update.py` rebases before it pushes so the two can meet
+#   without failing a run.
+# - **`audit_coverage.py` is not part of it and must not become part of it.** A
+#   full audit is 20,600 pro matches and seven minutes of API time, by hand and
+#   never on a schedule. Six-hourly, that alone is most of a monthly budget.
+
+name: Update match data
+
+on:
+  schedule:
+    # Every six hours, deliberately not on the hour: GitHub's scheduler is
+    # busiest at :00 and delays jobs queued there.
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+# One writer at a time. A second run starting while the first is between its
+# commit and its push is the one way this job can lose data, and it costs
+# nothing to make impossible. Queued rather than cancelled: a cancelled run has
+# already spent its API calls.
+concurrency:
+  group: push-to-master
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    # A run that fetches only new matches takes minutes. The ceiling is for a
+    # newly activated tournament arriving with a back catalogue, at 1.1 seconds
+    # a match.
+    timeout-minutes: 90
+
+    env:
+      # Optional, and the run degrades to keyless without it — the free tier
+      # needs no key. It is here because OpenDota enforces its limit per IP and
+      # a runner's address is shared and rotates, so a keyless run can meet
+      # somebody else's limit mid-tournament. See `core.keyed_url`.
+      OPENDOTA_API_KEY: ${{ secrets.OPENDOTA_API_KEY }}
+      # Explicit rather than merely defaulted. 288 KB a match cannot live on a
+      # runner or in the repository, and this is the acceptance criterion.
+      SAVE_RAW: "false"
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+        with:
+          # The whole history, because the run rebases on the remote before it
+          # pushes and a shallow clone has nothing to rebase onto. The repo is
+          # 12 MB packed — the 37 MB Standard store compresses well.
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          # Matches `runtime.txt`, which is what Streamlit Cloud reads.
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Restore the run's checkpoints
+        # Machine state: which matches have been fetched, which were given up on
+        # as unparsed, and the day the resolver last ran. None of it is
+        # committed, and losing it is survivable rather than free — the fetched
+        # list is rebuilt from the Standard store by `fetched_checkpoint`, and
+        # the cost of the rest is one extra resolver walk.
+        uses: actions/cache/restore@v4
+        with:
+          path: checkpoints
+          key: checkpoints-${{ github.run_id }}
+          restore-keys: checkpoints-
+
+      - name: Identify the committer
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch new matches and push
+        shell: bash
+        run: python auto_update.py 2>&1 | tee "$RUNNER_TEMP/update.log"
+
+      - name: Save the run's checkpoints
+        # `always()`, because a run that fetched half a tournament and then fell
+        # over has still fetched it, and the checkpoint is what stops the next
+        # run paying for those matches again.
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: checkpoints
+          key: checkpoints-${{ github.run_id }}
+
+      - name: Report what the run did
+        if: always()
+        shell: bash
+        run: |
+          # No `&&` chain here: this step runs on `always()`, the log is missing
+          # exactly when the run failed early, and under `set -e` a chain whose
+          # test fails would fail the step that exists to report the failure.
+          log="$RUNNER_TEMP/update.log"
+          summary=""
+          if [ -f "$log" ]; then
+            summary=$(grep -m1 -F "RUN SUMMARY: " "$log" || true)
+          fi
+
+          {
+            echo "### Data update"
+            echo
+            if [ -n "$summary" ]; then
+              echo "${summary#*RUN SUMMARY: }"
+            else
+              echo "No summary line — the pipeline did not reach the end of main()."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the log of a failed run
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: update-log-${{ github.run_id }}
+          path: ${{ runner.temp }}/update.log
+          if-no-files-found: ignore
+          retention-days: 14

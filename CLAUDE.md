@@ -44,6 +44,8 @@ Single-context — one `CONTEXT.md` plus `docs/adr/` at the repo root. See `docs
 
 **The patch is recorded at hotfix grain** (`16`, 2026-08-12): the CSV carries `patch_hotfix` beside `patch_label`, resolved from each match's `start_time` against Valve's own 117-entry patch list. Three buckets become nine — 7.39e (605), 7.40 (33), 7.40c (483), 7.41 (56), 7.41a (22), 7.41b (119), 7.41c (260), 7.41d (184), 7.41e (60) — and `patch_label` is untouched, so no figure on the dashboard moved. Nothing surfaces it yet; that is deliberate, and whatever does must show each bucket's match count. The boundary question the issue left open turned out to have a factual answer: **all 117 of Valve's timestamps are exactly midnight US/Pacific**, so the field is a release date dressed as a moment, and OpenDota's own patch id is reproducible from its constants' second-precision dates on 1,822 of 1,822 matches. `patch_label` therefore decides the gameplay patch and Valve's list only chooses the revision inside it — 28 matches of 2025-12-15 stay on 7.39e. See ADR-0012.
 
+**The pipeline runs in GitHub Actions** (`13`, 2026-08-14, *code in, not yet live*): `.github/workflows/update-data.yml` runs `auto_update.py` every six hours and on demand, and `tests.yml` runs the 650-test offline suite on every push and pull request. Three things changed in the code to make an unattended run safe. `OPENDOTA_API_KEY` is optional and goes on OpenDota URLs only — never Valve's patch list, and never into a printed line. The **resolver is gated to one run a day** (`resolve_if_due`), because its worst case is a 259-page walk for an event that never resolves, which is 7,800 calls a month daily and 31,000 six-hourly against a budget of 50,000. And the fetched-match checkpoint is **derived from the Standard store when there is no file**, because `checkpoints/` is machine state that a runner never has — without it every run re-fetches 1,822 matches and appends 37 MB of duplicates to a committed file. Three human steps remain and the issue stays open until they are done: obtain the API key and add it as a repository secret, run the workflow once by hand, and disable the workstation's `Dota2DataUpdate` task.
+
 What is still missing is the last mile: a resolved league that nobody has approved is an `ATTENTION` line in the run's output and a row on that tab, not yet a pull request. That is `15`. The rest of `.scratch/tier1-pipeline-automation/` rebuilds correctness and hosting. Read ADR-0001 through 0004 before touching the pipeline, ADR-0009 as well before touching the resolver, and ADR-0010 before touching either store.
 
 ## File Structure
@@ -54,8 +56,8 @@ project/
 ├── liquipedia.py             # Liquipedia client shell — Tier 1 calendar, cache, rate limit
 ├── core.py                   # pure transform core — plain data in, plain data out
 ├── dashboard.py              # Streamlit dashboard
-├── push_data.py              # bumps dashboard.py date + commits + pushes to trigger redeploy
-├── auto_update.py            # scheduled daily run: pipeline, then push if new data
+├── push_data.py              # by hand: bumps dashboard.py date + commits + rebases + pushes
+├── auto_update.py            # the scheduled run: pipeline, then push if new data. Importable
 ├── audit_coverage.py         # by hand, not scheduled: re-resolves a period in full, both directions
 ├── requirements.txt          # flexible version ranges — NOT exact pins
 ├── requirements-dev.txt      # adds pytest; not installed on Streamlit Cloud
@@ -65,6 +67,9 @@ project/
 ├── CLAUDE.md                 # this file — rules and facts
 ├── CONTEXT.md                # domain glossary and model
 ├── PLAN.md                   # phased roadmap
+├── .github/workflows/
+│   ├── update-data.yml       # the six-hourly pipeline run — the only unattended writer
+│   └── tests.yml             # the offline suite, on every push and pull request
 ├── docs/
 │   ├── adr/                  # architectural decision records (created lazily)
 │   └── agents/               # issue-tracker.md, domain.md
@@ -74,6 +79,8 @@ project/
 │   └── <feature-slug>/       # open work only
 ├── tests/                    # pytest suite — runs offline, no network, no API
 │   ├── conftest.py           # fixture loaders + a patch_map fixture
+│   ├── test_scheduled.py     # what changes when the run is unattended — key, gate, checkpoint
+│   ├── test_deploy.py        # what the push stages, and what it refuses to
 │   └── fixtures/             # gzipped raw OpenDota payloads, committed
 │       ├── audit_2025.json.gz # the 2025 candidate pool, recorded by the live audit
 │       ├── valve_patch_list.json.gz  # Valve's 117 patch releases, envelope and all
@@ -87,8 +94,9 @@ project/
 │   ├── tier1_calendar.json   # Tier 1 fallback calendar — committed, generated not typed
 │   └── tier1_resolution.json # event → league, and the gaps — committed, generated
 └── checkpoints/
-    ├── fetched_matches.json          # pipeline checkpoint — local only
+    ├── fetched_matches.json          # pipeline checkpoint — local only, rebuildable
     ├── unparsed_matches.json         # matches given up on as unparsed — local only
+    ├── last_resolution.json          # the UTC day the resolver last ran — local only
     └── liquipedia_tier1_cache.json   # Tier 1 calendar cache — local only
 ```
 
@@ -124,7 +132,13 @@ Non-negotiable when writing any new analysis or chart:
 - **Keep `requirements.txt` on flexible ranges.** Exact pins broke imports on Streamlit Cloud, which defaults to Python 3.14. `requirements-dev.txt` follows the same rule.
 - **New transformation logic goes in `core.py`, not the pipeline.** If it takes plain data and returns plain data, it belongs in the core and gets a test. Anything reaching the network, the filesystem, git or Streamlit stays in the shell. This is the seam the whole test suite hangs off — see `docs/adr/0005-pure-transform-core.md`.
 - **Nothing in the test suite may touch the network.** Fixtures are recorded payloads under `tests/fixtures/`; the whole suite runs offline in about two seconds, and it stays that way. It was under one until the 2026 candidate pool arrived — 78 leagues and 29,000 matches, and worth the second. The page-sized fixtures are **session-scoped** in `conftest.py`; making them function-scoped again costs four seconds.
-- **Every OpenDota call goes through `fetch_url`.** That is where the timeout, the retry policy and the rate-limit delay live, and a call made around it has none of them — which is exactly what `get_patch_map` was for two months. The same rule `liquipedia.py` follows for its own endpoint.
+- **Every OpenDota call goes through `fetch_url`.** That is where the timeout, the retry policy, the rate-limit delay and now the API key live, and a call made around it has none of them — which is exactly what `get_patch_map` was for two months. The same rule `liquipedia.py` follows for its own endpoint.
+- **The API key goes on OpenDota URLs and nowhere else, and is never printed.** `core.keyed_url` checks the base rather than assuming it: Valve's patch list is the one call that goes elsewhere, and sending an OpenDota credential to a third party is a leak rather than a no-op. `fetch_url` reports the URL the *caller* asked for, not the one it requested — the Actions log of a public repository is public, and a secret that was never written needs no masking. A run with no key is the free tier and must keep working: the secret is optional, and `DELAY_SECONDS` stays at 1.1 with or without it.
+- **The resolver runs at most once a day, whatever the cadence of the job around it.** `resolve_if_due` is the gate and `checkpoints/last_resolution.json` is what it reads. A started event that never resolves is walked for 259 pages every run for a year, which is 7,800 calls a month daily and 31,000 six-hourly. Match fetching is what wants the six-hour cadence; resolution is not, and `events_awaiting_resolution` works in whole days, so nothing is lost. Do not fix a budget problem by dropping the whole pipeline back to daily.
+- **A missing checkpoint is rebuilt from the Standard store, never assumed empty.** `checkpoints/` is machine state and is not committed, so a hosted runner has none — and a run that believed it re-fetches all 1,822 matches and appends 37 MB of duplicate lines to a committed file. `core.checkpoint_from_store` derives it by the **same `classify_fetch` rule the live loop uses**, so a held match stays held; deriving on store membership instead would silently switch off the re-fetch for every machine that had to rebuild.
+- **Nothing may add an audit step to the scheduled job.** `audit_coverage.py` is 20,600 pro matches and about seven minutes of API time, by hand. At six-hourly it is most of a monthly budget on its own, and its answer changes about as often as the back catalogue does.
+- **`auto_update.py` never stages `dashboard.py` wholesale.** It bumps and stages the redeploy marker only when the working copy differs from the committed one in nothing but that line — `core.same_but_for_the_data_date`, which normalises line endings first, because `core.autocrlf` is on and a raw comparison would answer "edited" for every file in the repository. On a runner the tree is clean and this never fires; on the workstation it is what stops an unattended job deploying a half-finished dashboard edit to a public app. A run that refuses still pushes its data. `push_data.py` is deliberately *not* guarded — it is run by hand, by the person whose edits those would be.
+- **Commit, then pull, then push.** `git pull --rebase` refuses a dirty tree, so the run's own work has to be a commit first. Both writers rebase: the runner every six hours and `push_data.py` by hand, and a remote ahead of local is ordinary now rather than a fault.
 - **Nothing may read the pipeline's output except by its summary line.** `auto_update.py` calls `core.read_run_summary`; taking the last line of stdout is what made every log entry for two months read `Pipeline: first_blood_time_mins`. The prefix is a contract — the rest of the output stays a human's to read. See ADR-0011.
 - **Liquipedia's four access conditions are code, not intent.** Any new call to `liquipedia.net` goes through `liquipedia.py` so it inherits the User-Agent, the 30-second `action=parse` interval and the cache. Anything displaying calendar data renders `core.LIQUIPEDIA_ATTRIBUTION`. These are the terms of the free API — see ADR-0006.
 - **A Liquipedia page that parses to zero rows is a failed fetch, not an empty Tier 1 list.** Treating it as real would report every tournament missing at once, the first time a class name changes. `get_tier1_events` falls back and reports its `source`; never infer health from an empty list.
@@ -185,6 +199,10 @@ Pure functions only — plain data in, plain data out. No network, no filesystem
 - `suspect_reasons(match, objective_counts=None)` — every reason this match's objective data cannot be trusted, as a tuple; empty means the numbers stand. Missing objectives short-circuit, since the zero towers *are* the missing array rather than separate evidence. Pass the counts when you already have them; the verdict is the same either way.
 - `retry_window_open(match, now)` — whether a suspect match is young enough to re-fetch. **The deadline hangs off the match's own `start_time`**, not off when the pipeline first saw it, which is what keeps it pure and what makes a backfilled event past its deadline on arrival.
 - `classify_fetch(match, now)` — what to do with a match just fetched: `FETCH_COMPLETE`, `FETCH_HELD` or `FETCH_UNPARSED`. The whole re-fetch policy is this one function, and it is tested here rather than in the shell that acts on it.
+- `keyed_url(url, api_key, api_base)` — the URL to request. Adds the key when there is one **and** the URL is OpenDota's; `api_base` is checked rather than assumed, because every string starts with the empty one and a base that got lost would send the credential to whatever was asked for next. No key is not an error — it is the free tier.
+- `resolution_due(last_run, today)` — whether the resolver should run at all, in whole UTC days. The test is **inequality, not "older than"**: a marker dated in the future would otherwise switch the resolver off until the date caught up, and running rewrites the marker, so this self-corrects. Anything that is not a date string is due — an extra walk is the safe direction.
+- `checkpoint_from_store(records, now)` — the fetched-match checkpoint, derived from the Standard store for a machine that has no file. By `classify_fetch`, **never by membership**: a held match is in the store and deliberately out of the checkpoint, and that absence is the whole re-fetch mechanism.
+- `bump_data_date(text, day)` / `same_but_for_the_data_date(committed, working)` — the redeploy marker, and whether anybody but a push has touched `dashboard.py`. The second writes the same date into both sides before comparing, so the marker cannot decide the answer, and normalises line endings, because `core.autocrlf` is on and a raw comparison is False for every file in the repository.
 - `retry_pause(status, attempt)` — seconds to wait before asking again, or None to stop. **`status` is None for a request that never got one** — a timeout, a dropped connection — which is transient by definition, since something below the application answered. The whole retry policy is this one function; the shell only asks, sleeps and gives up. See ADR-0011.
 - `league_run_record(league_id, name)` / `matches_fetched(record)` / `summarise_run(records)` — a league's account of a run, how many matches it gave up, and the totals. The three fetch verdicts **are** the record's count keys, so the shell tallies `record[classify_fetch(...)]` rather than through a mapping that could drift. `fetched` is the three together: a held match cost a call and is in the store. `failed_leagues` carries names, not a count, because the count is a question and the name is the answer.
 - `format_run_report(records)` / `format_run_summary(totals)` / `read_run_summary(output)` — the table a run prints, the one line it ends with, and the read of that line by `auto_update.py`. Write side and read side sit together because `RUN_SUMMARY_PREFIX` is a contract between two processes.
@@ -226,13 +244,15 @@ The shell around the core: network, files, checkpoints. Still organised in `# %%
 
 1. Config, paths, `get_patch_map()` and `ensure_directories()` — both **called from `main()`, never at import**; **1b** the two file shapes — `write_text_atomic` / `append_text`; **1c** the Standard store — `read_standard_store` / `append_standard` / `append_raw` / `backfill_standard_store`
 2. Rate-limited fetcher (`fetch_url`) — 1.1s delay, 60 calls/min free tier, an explicit timeout and `core.retry_pause` deciding what is asked again; **2b** the ledger — `read_ledger` / `write_ledger` / `fetch_all_leagues` / `load_ledger`; **2c** the resolver — `fetch_pro_matches` / `confirm_candidates` / `resolve_tier1_leagues` / `write_resolution`
-3. **3a** checkpoint load/save; **3b** match detail fetcher — the **full** payload either way, since what to keep is `core.extract_standard`'s business
+3. **3a** checkpoint load/save, plus `fetched_checkpoint(now)` — the file when there is one, and `core.checkpoint_from_store` over the Standard store when there is not, which is every run on a runner. The file wins because it is the cheaper answer to the same question; **3b** match detail fetcher — the **full** payload either way, since what to keep is `core.extract_standard`'s business
 4. Main loop over the active leagues, match-level checkpoint only, appending a Standard record per match — and the raw payload too when the seam is open
 5. `build_dataframe(patch_map, releases=())` reads the **Standard store**, calls `core.build_rows`, carries the hotfix column forward from the CSV it is about to replace, exports `matches_flat.csv`, then writes `data/meta.json` via `write_meta()`. Returns **`(df, rows)`** — the resolver needs the rows, where team ids are still ints rather than the floats-beside-NaN the frame re-reads them as
 
 **`main()` fetches `/leagues` once and hands it to both callers.** `load_ledger(api_leagues)` takes it as a parameter, and `_FETCH_LEAGUES` is the sentinel that keeps "the caller passed nothing" apart from "the caller passed None because the fetch failed" — collapsing those would make a failed fetch trigger a second one, and a seeded ledger written over a real one.
 
 **The resolver walks `/proMatches` backwards, then confirms each candidate in full.** The walk is cheap and gives windows *and* team ids in one pass, but a league that began before the walk did looks narrower than it is — and narrow is the direction that makes a league fit inside an event it has no business winning. So `confirm_candidates()` re-reads every shortlisted league's whole match list before it can win, and a league that cannot be re-read is dropped rather than judged on a partial window. A short walk therefore costs a missed candidate, recorded as a gap, never a wrong answer.
+
+**Resolution runs at most once a UTC day** (`resolve_if_due`), whatever the cadence of the job around it. The marker is `checkpoints/last_resolution.json` — machine state, cached between Actions runs, and losing it costs one extra walk. There is deliberately **no flag to force a run**: delete the marker, which is the same idiom as removing a match id to re-fetch a league.
 
 **Resolution runs last in `main()` and usually costs nothing.** `core.events_awaiting_resolution` skips events the ledger already maps, events that have not started, and events older than `core.RESOLVER_LOOKBACK_DAYS` (365) — so in steady state there is no walk at all. When a tournament opens, it resolves on the day of its first match.
 
@@ -306,9 +326,12 @@ Obtains the Tier 1 calendar that defines the dataset's scope. Parsing lives in `
 
 ## Hosting
 
+- **`.github/workflows/update-data.yml` is the scheduled run** — every six hours at `:17` (not `:00`, where GitHub's scheduler is busiest) and on demand. It restores `checkpoints/` from the Actions cache, runs `auto_update.py`, saves the cache back on `always()`, puts the `RUN SUMMARY:` line in the job summary and keeps the log as an artifact when the run fails. `concurrency: push-to-master` is queued rather than cancelled, because a cancelled run has already spent its API calls. **Losing the cache is survivable by design**: the fetched-match list rebuilds from the Standard store and the only real cost is one extra resolver walk.
+- `OPENDOTA_API_KEY` is a repository secret, optional, and read from the environment. No Liquipedia credential exists or is expected — that is the free MediaWiki endpoint, ADR-0006.
+- `.github/workflows/tests.yml` runs the offline suite on every push and pull request. It is there because a job that pushes to `master` unattended means a broken core is no longer something a human notices before the next deploy.
 - Streamlit Community Cloud, redeploys automatically on every push to `master`
 - Six data files are committed: `matches_flat.csv`, `meta.json`, `tier1_calendar.json`, `leagues.json`, `tier1_resolution.json` and `matches_standard.jsonl`. The raw sink and the Liquipedia cache stay local. All six are in the `DEPLOYED` list in `push_data.py` **and** `auto_update.py` — adding a new deployed data file means editing both. Nothing deployed reads the Standard store; it ships because a modelling asset living on one workstation is the thing the artifact split was for.
-- `auto_update.py` logs the run's own `RUN SUMMARY:` line via `core.read_run_summary`, and logs `FINISHED WITHOUT A SUMMARY` when there is none — a pipeline that exited 0 without reaching the end of `main()`. A non-zero exit is still `FAILED` with stderr, as before.
+- `auto_update.py` **does nothing when imported** — `main()` is the only entry point and `run()` is the seam `tests/test_deploy.py` replaces, so not one git command is executed by the suite. It logs the run's own `RUN SUMMARY:` line via `core.read_run_summary`, and logs `FINISHED WITHOUT A SUMMARY` when there is none — a pipeline that exited 0 without reaching the end of `main()`. A non-zero exit is still `FAILED` with stderr, as before.
 - `auto_update.py` exits early when nothing changed, and **the ledger and the Tier 1 resolution both count as change alongside the CSV**. A run that fetched no matches but discovered a new league has found the one thing this job exists to notice; testing the CSV alone would leave that `pending` entry dirty in the working tree until somebody happened to look. The resolution file is safe to test on because it is only rewritten when the mapping itself moves.
 - Streamlit may not redeploy on CSV-only pushes — always use `push_data.py`, which bumps a `# data: YYYY-MM-DD` comment in `dashboard.py` so a `.py` file always changes. The `ttl=1800` on `load_data()` is the safety net.
 

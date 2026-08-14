@@ -33,6 +33,7 @@ from core import (
     build_rows,
     candidates_in_window,
     carry_forward_hotfix,
+    checkpoint_from_store,
     classify_fetch,
     coverage_meta,
     events_awaiting_resolution,
@@ -43,6 +44,7 @@ from core import (
     format_run_report,
     format_run_summary,
     iter_json_array,
+    keyed_url,
     known_team_ids,
     league_catalogue,
     league_run_record,
@@ -50,6 +52,7 @@ from core import (
     merge_discovered_leagues,
     parse_standard_records,
     patch_releases,
+    resolution_due,
     resolution_problems,
     resolution_report,
     resolution_walk_start,
@@ -91,6 +94,12 @@ LEDGER_FILE = os.path.join(DATA_DIR, "leagues.json")
 MATCH_CHECKPOINT = os.path.join(CHECKPOINT_DIR, "fetched_matches.json")
 # Matches given up on: suspect, out of retries, and never to be fetched again.
 UNPARSED_CHECKPOINT = os.path.join(CHECKPOINT_DIR, "unparsed_matches.json")
+# The UTC day the resolver last ran, which is what holds it to one run a day
+# while match fetching runs every six hours. Machine state, so it lives in
+# `checkpoints/` with the rest of it and is not committed — losing it costs one
+# extra walk, which is the direction to fail in. Deleting it is how a run is
+# forced, the same idiom as removing a match id to re-fetch a league.
+RESOLUTION_CHECKPOINT = os.path.join(CHECKPOINT_DIR, "last_resolution.json")
 CSV_FILE = os.path.join(DATA_DIR, "matches_flat.csv")
 META_FILE = os.path.join(DATA_DIR, "meta.json")
 # Which Tier 1 event each league is, and which events have no league at all.
@@ -105,6 +114,13 @@ BASE_URL = "https://api.opendota.com/api"
 # the pipeline reaches; it still goes through `fetch_url`, which is where the
 # timeout and the retry schedule live.
 PATCH_LIST_URL = "https://www.dota2.com/datafeed/patchnoteslist"
+
+# Optional, and absent locally. OpenDota's free tier is keyless and its limit is
+# enforced per IP — fine on a workstation, and not on a hosted runner whose
+# address is shared and rotates between jobs. A run with no key behaves exactly
+# as it always has; `core.keyed_url` decides which URLs carry it, and Valve's
+# patch list is not one of them.
+OPENDOTA_API_KEY = os.getenv("OPENDOTA_API_KEY", "")
 
 # The free tier allows 60 calls a minute. One second between calls is exactly
 # that, which is not under it: the sleep starts after the response, so a run of
@@ -434,15 +450,21 @@ def fetch_url(url, retry_policy=None):
     and it resolves at call time rather than as a default argument — the same
     rule `fetch_pro_matches` follows, since a default argument binds once when
     the function is defined.
+
+    The API key is added here and **nowhere is it printed**. Every message below
+    reports `url`, the one the caller asked for, rather than `requested`, the one
+    with the credential on it: the Actions log of a public repository is public,
+    and a secret that was never written needs no masking.
     """
-    policy  = retry_pause if retry_policy is None else retry_policy
-    attempt = 0
+    policy    = retry_pause if retry_policy is None else retry_policy
+    requested = keyed_url(url, OPENDOTA_API_KEY, BASE_URL)
+    attempt   = 0
 
     while True:
         status = None
 
         try:
-            response = requests.get(url, timeout=REQUEST_TIMEOUT_SECONDS)
+            response = requests.get(requested, timeout=REQUEST_TIMEOUT_SECONDS)
             time.sleep(DELAY_SECONDS)
             status = response.status_code
 
@@ -702,6 +724,33 @@ def fetch_pro_matches(since, max_pages=None):
     return collected
 
 
+def read_last_resolution():
+    """
+    The UTC day the resolver last ran, as an ISO string, or None if it never
+    has. Anything unreadable is None: a damaged marker means one extra walk,
+    where trusting it could mean a resolver that never runs again.
+
+    This is deliberately not read out of `data/tier1_resolution.json`, whose
+    `generated_at` is when the answer last *changed* rather than when it was
+    last checked — which is the whole point of that file and the wrong question
+    here.
+    """
+    try:
+        with open(RESOLUTION_CHECKPOINT, "r", encoding="utf-8") as f:
+            marker = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return None
+
+    return marker.get("last_run") if isinstance(marker, dict) else None
+
+
+def record_resolution_run(day):
+    """Records that the resolver ran on `day`, an ISO date string."""
+    write_text_atomic(
+        RESOLUTION_CHECKPOINT, json.dumps({"last_run": day}) + "\n"
+    )
+
+
 def read_resolution():
     """The resolution as last written, or None when there is none to read."""
     try:
@@ -902,6 +951,32 @@ def resolve_tier1_leagues(ledger, api_leagues, known_teams, now):
     print("=" * 60)
 
 
+def resolve_if_due(ledger, api_leagues, known_teams, now):
+    """
+    Runs the resolver on the first run of each UTC day, and skips it on every
+    other run of that day.
+
+    Match fetching is what wants the six-hour cadence introduced in issue 13;
+    resolution is not. Its worst case is an event that starts and never
+    resolves — no `tier1_event` is ever written, so it stays awaiting for the
+    whole 365-day lookback and every run walks `/proMatches` back to its start
+    date looking for it again. Measured at 259 pages, one call each: about 7,800
+    calls a month daily, and 31,000 six-hourly against a 50,000 budget.
+
+    Gating it costs nothing in outcome. `core.resolution_due` explains why the
+    day is the right grain; the marker it reads is machine state, so a runner
+    that lost its cache resolves once more than it needed to.
+    """
+    today = now.date().isoformat()
+
+    if not resolution_due(read_last_resolution(), today):
+        print(f"Tier 1 resolution already ran today ({today}) — skipped")
+        return
+
+    resolve_tier1_leagues(ledger, api_leagues, known_teams, now)
+    record_resolution_run(today)
+
+
 # %%
 # # Step 3a - Checkpoints
 
@@ -914,6 +989,34 @@ def load_checkpoint(filepath):
         with open(filepath, "r") as f:
             return set(json.load(f))
     return set()
+
+def fetched_checkpoint(now):
+    """
+    The match ids this run should treat as already fetched.
+
+    The checkpoint file when there is one, and otherwise `core.checkpoint_from_store`
+    over the Standard store. `checkpoints/` is machine state and is not
+    committed, so on a GitHub Actions runner there is never a file — and a run
+    that believed that would re-fetch all 1,822 matches and append every one of
+    them to the committed store again, 37 MB at a time.
+
+    The file wins when it exists, because it is the cheaper answer to the same
+    question: rebuilding parses the whole store, which this run will do again at
+    the end to build the CSV.
+    """
+    fetched = load_checkpoint(MATCH_CHECKPOINT)
+
+    if fetched:
+        return fetched
+
+    rebuilt = checkpoint_from_store(read_standard_store(), now)
+
+    if rebuilt:
+        print(f"No match checkpoint — recovered {len(rebuilt)} fetched "
+              f"match ids from the Standard store")
+
+    return rebuilt
+
 
 def save_checkpoint(filepath, data):
     """
@@ -1017,15 +1120,17 @@ def run_pipeline(leagues):
         print("=" * 60)
         return []
 
-    # Load checkpoints. The stores themselves are never loaded: they are
-    # appended to, and nothing in this loop needs to know what is already in
-    # them — the checkpoint is what says which matches have been fetched.
-    fetched_matches   = load_checkpoint(MATCH_CHECKPOINT)
-    unparsed_matches  = load_checkpoint(UNPARSED_CHECKPOINT)
-
     # One clock for the run. Retry windows are five days wide, so nothing turns
     # on where inside a run's few minutes a given match is classified.
     now = datetime.now(timezone.utc)
+
+    # Load checkpoints. The fetched-match checkpoint falls back to the Standard
+    # store when there is no file, which is every run on a hosted runner. The
+    # unparsed one does not: it is a record of what was given up on rather than
+    # a decision, and the decision it would inform — never fetch this again —
+    # already lives in the checkpoint above.
+    fetched_matches   = fetched_checkpoint(now)
+    unparsed_matches  = load_checkpoint(UNPARSED_CHECKPOINT)
 
     records = []
     pending = []
@@ -1266,6 +1371,8 @@ def main():
     the dataset, and this run may have just added some. It informs the next
     run rather than this one, which is the right way round: a league it has
     newly recognised still needs a verdict before anything is fetched from it.
+    It also runs **at most once a day**, whatever the cadence of the job around
+    it — see `resolve_if_due`.
 
     The summary line is printed at the very end, after everything that could
     fail has run. That is deliberate: `auto_update.py` records the line, so its
@@ -1298,7 +1405,7 @@ def main():
     records  = run_pipeline(active_leagues(ledger))
     df, rows = build_dataframe(patch_map, releases)
 
-    resolve_tier1_leagues(
+    resolve_if_due(
         ledger, api_leagues, known_team_ids(rows), datetime.now(timezone.utc)
     )
 

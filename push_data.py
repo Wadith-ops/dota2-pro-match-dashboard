@@ -1,12 +1,20 @@
 """
-Run this after the pipeline to push updated data to prod.
-Bumps the date comment in dashboard.py so Streamlit Cloud always redeploys.
+Run this after the pipeline to push updated data to prod, by hand.
+
+Bumps the date comment in dashboard.py so Streamlit Cloud always redeploys, and
+rebases on the remote first — since issue 13 the runner pushes too, so a remote
+ahead of this workstation is ordinary rather than a fault.
+
+Unlike `auto_update.py` this one bumps and stages `dashboard.py` unconditionally:
+it is run by hand, immediately after the pipeline, by the person whose edits
+those would be. `auto_update.py` runs unattended and does not get to assume that.
 """
-import re
 import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
+
+import core
 
 HERE = Path(__file__).parent
 DASHBOARD = HERE / "dashboard.py"
@@ -22,9 +30,10 @@ def run(cmd):
 
 
 # Bump the date comment in dashboard.py
-text = DASHBOARD.read_text(encoding="utf-8")
-text = re.sub(r"^# data: \d{4}-\d{2}-\d{2}", f"# data: {DATE}", text, flags=re.MULTILINE)
-DASHBOARD.write_text(text, encoding="utf-8")
+DASHBOARD.write_text(
+    core.bump_data_date(DASHBOARD.read_text(encoding="utf-8"), DATE),
+    encoding="utf-8",
+)
 print(f"Bumped dashboard.py date to {DATE}")
 
 # Commit and push.
@@ -56,5 +65,7 @@ DEPLOYED = [
 present = [p for p in DEPLOYED if (HERE / p).exists()]
 run(["git", "add", *present])
 run(["git", "commit", "-m", f"data: update matches ({DATE})"])
-result = run(["git", "push", "origin", "master"])
+# Commit, then pull, then push: `git pull --rebase` refuses a dirty tree.
+run(["git", "pull", "--rebase", "origin", "master"])
+run(["git", "push", "origin", "master"])
 print("Pushed — Streamlit Cloud will redeploy automatically.")

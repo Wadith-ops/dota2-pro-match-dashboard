@@ -1,0 +1,34 @@
+# The offline test suite, on every push and pull request.
+#
+# It exists because `update-data.yml` pushes to `master` unattended: a broken
+# core is no longer something a human notices before the next deploy. The suite
+# touches no network and takes about three seconds — see `tests/`.
+
+name: Tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Run the suite
+        run: python -m pytest -q

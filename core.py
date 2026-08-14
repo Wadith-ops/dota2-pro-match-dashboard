@@ -13,6 +13,7 @@ import json
 import re
 from datetime import date, datetime, timedelta, timezone
 from html.parser import HTMLParser
+from urllib.parse import quote
 
 # The draft format the dataset is overwhelmingly played on. Anything else is
 # flagged on the row — never dropped from it.
@@ -277,6 +278,87 @@ def flatten_objectives(objectives):
     return result
 
 
+# ── The redeploy marker ───────────────────────────────────────────────────────
+#
+# Streamlit Cloud does not reliably redeploy on a push that changes only data
+# files, so every push moves a dated comment at the top of `dashboard.py`. The
+# `ttl` on `load_data()` is not a substitute: an expiring cache re-reads the same
+# stale file inside the same container.
+#
+# It is here rather than in the two scripts that push because it is a string
+# transform, and because both of them need to apply it to the *same* text to
+# answer a second question — whether the working copy of `dashboard.py` differs
+# from the committed one in anything but this line. See `auto_update.py`.
+
+DATA_DATE_COMMENT = re.compile(r"^# data: \d{4}-\d{2}-\d{2}", re.MULTILINE)
+
+
+def bump_data_date(text, day):
+    """
+    `dashboard.py` with its `# data:` comment set to `day`, an ISO date string.
+
+    Returns the text unchanged when there is no such comment, which the caller
+    is expected to notice: without the marker a data-only push may not redeploy
+    at all.
+    """
+    return DATA_DATE_COMMENT.sub(f"# data: {day}", text)
+
+
+def same_but_for_the_data_date(committed, working, day="0000-00-00"):
+    """
+    Whether two versions of `dashboard.py` differ in nothing but the `# data:`
+    line — which is the question "has anybody edited this file since it was last
+    committed, other than a push that bumped the marker?"
+
+    Both sides get the same date written into them and are then compared whole,
+    so the marker cannot decide the answer either way. `day` is arbitrary and
+    never appears in the result.
+
+    Line endings are normalised first. On Windows the blob is stored with LF and
+    checked out with CRLF, so a raw comparison is False for every file in the
+    repository — a guard that answers "edited" always is a guard that is off.
+    """
+    def normalised(text):
+        return bump_data_date(text.replace("\r\n", "\n"), day)
+
+    return normalised(committed) == normalised(working)
+
+
+# ── Identifying the caller ────────────────────────────────────────────────────
+#
+# OpenDota's free tier is keyless and enforces its limit per IP. That is fine on
+# a workstation and not on a hosted runner, whose address is shared with whoever
+# else is running there and rotates between jobs — so a run can meet somebody
+# else's rate limit mid-tournament. The key is therefore optional: supplied in
+# CI, absent locally, and the same code path either way.
+#
+# Which URLs carry it is the part worth a function. Every OpenDota call is built
+# from one base, and exactly one call in the whole project goes elsewhere —
+# Valve's patch list. Sending an OpenDota credential to a third party is a leak
+# rather than a no-op, so the base is checked rather than assumed.
+
+API_KEY_PARAM = "api_key"
+
+
+def keyed_url(url, api_key, api_base):
+    """
+    The URL to request: the one given, with the API key added when there is a
+    key and the URL is OpenDota's.
+
+    Returns the URL untouched when the key is absent — which is what makes the
+    secret optional — and when the URL belongs to anybody else. `api_base` must
+    be a real prefix: every string starts with the empty one, so a base that got
+    lost would send the key to whatever was asked for next.
+    """
+    key = api_key.strip() if isinstance(api_key, str) else ""
+
+    if not key or not api_base or not url.startswith(api_base):
+        return url
+
+    separator = "&" if "?" in url else "?"
+    return f"{url}{separator}{API_KEY_PARAM}={quote(key, safe='')}"
+
+
 # ── Retrying a failed call ────────────────────────────────────────────────────
 #
 # Whether a call is worth making again is a property of how it failed, and that
@@ -442,6 +524,29 @@ def classify_fetch(match, now):
         return FETCH_COMPLETE
 
     return FETCH_HELD if retry_window_open(match, now) else FETCH_UNPARSED
+
+
+def checkpoint_from_store(records, now):
+    """
+    The match ids a run should treat as already fetched, derived from the
+    Standard store rather than from a checkpoint file.
+
+    `checkpoints/` is machine state and is not committed, so a hosted runner
+    starts every job without one — and a run with no checkpoint re-fetches the
+    whole dataset and appends all of it to the committed store a second time.
+    The store is the record of what was fetched, so it can answer the question
+    on its own.
+
+    It is derived by the **same rule the live loop uses**, not by membership: a
+    held match is in the store and deliberately not in the checkpoint, because
+    that absence is the entire re-fetch mechanism. Deriving on membership would
+    quietly switch that off for every machine that had to rebuild.
+    """
+    return {
+        record["match_id"] for record in records or []
+        if record.get("match_id") is not None
+        and classify_fetch(record, now) != FETCH_HELD
+    }
 
 
 def flatten_match(match, patch_map, releases=()):
@@ -1742,6 +1847,30 @@ def resolution_problems(ledger, resolutions):
             )
 
     return problems
+
+
+def resolution_due(last_run, today):
+    """
+    Whether the resolver should run at all, given the day it last did.
+
+    Both dates are ISO strings, and the comparison is of whole UTC days because
+    that is the grain the resolver already works in: `events_awaiting_resolution`
+    takes a date, and ADR-0009's goal is that an event resolves on the day of
+    its first match. A once-daily resolver does that exactly as well as one that
+    runs every six hours — and the walk it makes for an event that never
+    resolves is 259 pages, which at four runs a day is most of a monthly budget.
+
+    The test is inequality rather than "older than today" on purpose. A marker
+    dated in the future — a clock that ran ahead, a run on another machine —
+    would otherwise switch the resolver off until the date caught up. Running
+    rewrites the marker, so this self-corrects on the first run. Anything that
+    is not a date string is due, which is the safe direction: an extra walk,
+    never a skipped one.
+    """
+    if not isinstance(last_run, str) or not last_run.strip():
+        return True
+
+    return last_run != today
 
 
 def events_awaiting_resolution(events, ledger, today,
