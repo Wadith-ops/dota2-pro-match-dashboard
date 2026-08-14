@@ -116,7 +116,7 @@ Like overlap it ranks and never gates. A tournament resolves on the day of its f
 
 **Known gap** — a Tier 1 event the resolver mapped to no league at all: a record in `data/tier1_resolution.json` with a null `league_id`. Two states, told apart by the event's own start date and never conflated, because they are the same absence and completely different news:
 
-- **Upcoming** — the event has not started. There is nothing to find, and this is the normal state of every future tournament. The International 2026 sits here until 13 August.
+- **Upcoming** — the event has not started. There is nothing to find, and this is the normal state of every future tournament. The International 2026 sat here until 13 August 2026, then resolved to league 19719 on the day of its first match.
 - **Overdue** — the event has started or finished and this project still has no data for it. This is the coverage hole the whole feature exists to make visible — the Esports World Cup, two months late.
 
 The boundary is inclusive: matches are played on day one, so a gap on day one is already overdue. An event with no published start date is upcoming, since nothing can be late without a date to be late against.
@@ -200,7 +200,7 @@ The authoritative list is the `active` entries in `data/leagues.json`; this tabl
 | 20009 | 1win Essence II             |
 | 19719 | The International 2026      |
 
-The International 2026 is configured but holds **zero matches** — it starts 13 Aug 2026, and its matches are picked up on the first daily run after that. A configured league with no matches is normal, not a fault.
+The International 2026 started on 13 Aug 2026 and its first 49 matches arrived on the 14th, taking the dataset to 1,871 across all 15 leagues. It was configured months ahead and held **zero matches** until then — a configured league with no matches is normal, not a fault, and it is what made the pickup automatic rather than something anybody had to remember.
 
 A league's **name here is the name the dashboard shows**, and it comes from the ledger rather than from OpenDota — which calls league 17419 "SLAM IV" where the dataset has said "Slam IV" for 96 matches. The pipeline writes the ledger's name onto every match row as `league_name`, so changing it in the ledger renames the tournament everywhere the next time the CSV is rebuilt, and leaving it to OpenDota would let a rebrand split one tournament into two.
 
