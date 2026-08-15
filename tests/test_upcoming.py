@@ -205,9 +205,9 @@ class TestAwaitingVerdict:
         ]
 
     def test_it_carries_a_pull_request_link_when_one_is_recorded(self):
-        # The approval PR is `15`, and nothing writes this field yet. Reading it
-        # is the seam: when 15 records a URL on the record, the tab links to it
-        # without further change.
+        # `propose_coverage.py` writes this field when it opens the pull
+        # request (`15`); reading it here is what makes the tab link to the
+        # proposal itself rather than to every open pull request.
         record = resolved("Esports World Cup 2026", "2026-07-07", "2026-07-19",
                           19785, "Esports World Cup 2026", LEDGER_PENDING)
         record["pull_request"] = "https://github.com/x/y/pull/42"

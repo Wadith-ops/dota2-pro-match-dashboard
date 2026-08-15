@@ -2008,6 +2008,14 @@ def tier1_resolution_state(events, ledger, resolutions=None, previous=None):
             "verdict"    : entry.get("verdict"),
             "ambiguous"  : bool(ranking.get("ambiguous")),
             "candidates" : ranking.get("candidates") or [],
+            # Written by `propose_coverage.py` rather than by the resolver, and
+            # carried forward here because the resolver rewrites this file. An
+            # event is examined once, so without this the run after a pull
+            # request opened would blank the link to it — and the Upcoming tab
+            # would fall back to "every open PR" while the very pull request it
+            # names sat waiting. Always from the last report: `resolutions`
+            # never carries one.
+            "pull_request": (remembered.get(name) or {}).get("pull_request"),
         })
 
     return records
@@ -2156,6 +2164,282 @@ def awaiting_verdict(records):
     return sorted(
         awaiting, key=lambda record: record["start_date"] or "", reverse=True,
     )
+
+
+# %%
+# # Proposing a coverage decision
+#
+# The last mile of the resolver. Everything above finds the league a Tier 1
+# event was played in; nothing above may decide to cover it — that is Wade's,
+# and since `tier1-pipeline-automation/15` it is taken by **merging a pull
+# request**. Merging is approval and closing is rejection, which is why a pull
+# request was chosen over an issue, a pending file or a button in the app: it is
+# literally "pending review", it is one tap on a phone, and both outcomes leave
+# an audit trail of what was accepted and what was refused.
+#
+# Everything here is text and records. Opening the pull request is
+# `propose_coverage.py`, which runs git and `gh` and nothing else.
+
+# One branch, therefore one open pull request. A second proposal updates this
+# branch rather than opening a second review of the same question.
+PROPOSAL_BRANCH = "tier1-league-proposals"
+
+# How a closed pull request says which leagues it proposed. The body is the only
+# thing GitHub hands the closing workflow that this project wrote itself: the
+# branch may already be deleted, and the diff is a megabyte of ledger.
+PROPOSAL_MARKER_NAME = "tier1-proposal"
+
+_PROPOSAL_MARKER = re.compile(
+    rf"<!--\s*{PROPOSAL_MARKER_NAME}:\s*([\d,\s]*?)\s*-->"
+)
+
+
+def proposals(records):
+    """
+    One proposal per Tier 1 event that resolved to a league **nobody has
+    judged**, each carrying the candidates that lost as `also_seen`.
+
+    The queue is `awaiting_verdict`'s, reused rather than restated. The
+    dashboard's Upcoming tab and the run's ATTENTION lines already read it, and
+    a pull request proposing a league the tab does not list would be a third
+    opinion on one question.
+
+    `also_seen` is the safety net for the design's one weakness: an event whose
+    field this project tracks none of would rank low, so every candidate that
+    was ranked and not proposed is listed. It costs five lines of a pull request
+    body and is the difference between a filter that is trusted and one that is
+    wondered about.
+
+    A **gap** is never proposed. There is no ledger line to change — OpenDota
+    has no league for it — so it is reported in the body instead, by the caller.
+    """
+    ranked = {record.get("event"): record.get("candidates") or []
+              for record in records or []}
+
+    listed = []
+
+    for entry in awaiting_verdict(records):
+        listed.append(dict(entry, also_seen=[
+            candidate for candidate in ranked.get(entry["event"], [])
+            if candidate.get("league_id") != entry["league_id"]
+        ]))
+
+    return listed
+
+
+def proposal_title(proposals):
+    """
+    The pull request's title: the event itself when there is one, a count when
+    there are several.
+
+    A title naming two tournaments is a title nobody finishes reading on a
+    phone, and the body names all of them anyway.
+    """
+    if len(proposals) == 1:
+        return (f"Cover {proposals[0]['event']} "
+                f"(league {proposals[0]['league_id']})")
+
+    return f"Cover {len(proposals)} newly detected Tier 1 leagues"
+
+
+def _share(value):
+    """A 0–1 share as a percentage, or a dash where there is no number."""
+    return "—" if value is None else f"{value * 100:.1f}%"
+
+
+def _window(record):
+    """An event's published window, or a note that it has none."""
+    opens, closes = record.get("start_date"), record.get("end_date")
+
+    return f"{opens} to {closes}" if opens and closes else "dates TBD"
+
+
+def _proposal_section(proposal):
+    """The heading, the evidence and the runners-up for one proposed league."""
+    contested = (f"contested — {len(proposal['also_seen']) + 1} candidates"
+                 if proposal["ambiguous"] else "the only candidate in the window")
+
+    lines = [
+        f"### {proposal['event']} — {_window(proposal)}",
+        "",
+        "| | |",
+        "|---|---|",
+        f"| OpenDota league | `{proposal['league_id']}` — "
+        f"{proposal['league_name']} |",
+        f"| Matches played | {proposal['match_count']} |",
+        f"| Teams already tracked | {_share(proposal['overlap'])} of team slots |",
+        f"| Window | {contested} |",
+    ]
+
+    if proposal["also_seen"]:
+        lines += [
+            "",
+            "**Also seen, not proposed**",
+            "",
+            "| League | Name | Teams | Window | Matches |",
+            "|---|---|---|---|---|",
+        ]
+        lines += [
+            f"| `{candidate['league_id']}` | {candidate.get('name')} | "
+            f"{_share(candidate.get('overlap'))} | "
+            f"{_share(candidate.get('coverage'))} | "
+            f"{candidate.get('match_count')} |"
+            for candidate in proposal["also_seen"]
+        ]
+
+    return lines
+
+
+def proposal_body(proposals, gaps=()):
+    """
+    The pull request body: enough to decide without leaving the page.
+
+    Per proposed league — the event and its window, the OpenDota league id and
+    name, how many matches it played, the share of team slots held by teams
+    already in the dataset, whether the window was contested, and every
+    candidate that lost.
+
+    `gaps` are the Tier 1 events **under way with no league at all**, which
+    cannot be proposed and are the loudest news the resolver has. They are
+    reported here because this is the page already in front of Wade; only
+    overdue ones belong, and the caller decides that — an upcoming tournament
+    repeated in every proposal is how a real gap stops being read.
+
+    Liquipedia is credited because this renders calendar data: event names and
+    published windows. That is a condition of the free API and not a courtesy —
+    see ADR-0006.
+    """
+    lead = ("A Tier 1 event resolved to an OpenDota league nobody has judged."
+            if len(proposals) == 1 else
+            f"{len(proposals)} Tier 1 events resolved to OpenDota leagues "
+            f"nobody has judged.")
+
+    lines = [
+        f"{lead} This pull request sets the verdict in `data/leagues.json` to "
+        f"`active`.",
+        "",
+        "- **Merging is approval.** The next scheduled run fetches the league; "
+        "nothing else needs doing.",
+        "- **Closing is rejection.** The verdict is recorded as `rejected`, and "
+        "the league is never proposed again. It stays reversible: `rejected` "
+        "back to `active` is a one-line edit that takes effect on the next run.",
+        "",
+        "The league name below is what the dashboard groups those matches "
+        "under. If it should read differently, edit `data/leagues.json` in this "
+        "pull request before merging — the name is the ledger's, never "
+        "OpenDota's.",
+        "",
+    ]
+
+    for proposal in proposals:
+        lines += _proposal_section(proposal) + [""]
+
+    if gaps:
+        lines += [
+            "### Under way with no league",
+            "",
+            "Tier 1 events being played that OpenDota has no data for. Nothing "
+            "here can be proposed — there is no league to cover — but each one "
+            "is a coverage hole right now.",
+            "",
+            "| Event | Window |",
+            "|---|---|",
+        ]
+        lines += [f"| {gap.get('event')} | {_window(gap)} |" for gap in gaps]
+        lines.append("")
+
+    lines += [
+        "---",
+        "",
+        LIQUIPEDIA_ATTRIBUTION,
+        "",
+        proposal_marker(proposal["league_id"] for proposal in proposals),
+    ]
+
+    return "\n".join(lines) + "\n"
+
+
+def proposal_marker(league_ids):
+    """The league ids a pull request proposes, as an HTML comment in its body."""
+    return (f"<!-- {PROPOSAL_MARKER_NAME}: "
+            f"{', '.join(str(league_id) for league_id in sorted(set(league_ids)))} -->")
+
+
+def proposed_league_ids(body):
+    """
+    The league ids a pull request proposed, read back out of its body.
+
+    A body with no marker proposes nothing, and nothing is what gets rejected.
+    Somebody rewriting the body by hand costs a league one more proposal on the
+    next run, which is the safe direction: the alternative is a verdict recorded
+    against a league the machine guessed at.
+    """
+    found = _PROPOSAL_MARKER.search(body or "")
+
+    if not found:
+        return []
+
+    return sorted({int(number) for number in found.group(1).split(",")
+                   if number.strip()})
+
+
+def record_verdicts(ledger, league_ids, verdict):
+    """
+    Writes `verdict` onto each named league, and returns `(ledger, changes)` —
+    a new document, and the `(league_id, before, after)` of every entry moved.
+
+    **A verdict already on record is never overwritten**, in either direction.
+    That is what makes both outcomes of a pull request safe to apply late: a
+    league proposed on Monday and covered by hand on Tuesday must not be
+    un-covered by Wednesday's closing of the stale pull request. Reversing a
+    decision stays a human edit to `data/leagues.json`, which is one word.
+
+    A league id the ledger has never seen is ignored rather than added.
+    Coverage is `data/leagues.json` seeded from OpenDota's own league list, and
+    an entry appearing from a pull request body would be a league nobody can
+    trace back to it.
+    """
+    named   = set(league_ids or ())
+    entries = [dict(entry) for entry in ledger_entries(ledger)]
+    changes = []
+
+    for entry in entries:
+        before = entry.get("verdict")
+
+        if (entry.get("league_id") not in named or before == verdict
+                or before in SETTLED_VERDICTS):
+            continue
+
+        changes.append((entry["league_id"], before, verdict))
+        entry["verdict"] = verdict
+
+    merged = dict(ledger) if isinstance(ledger, dict) else {}
+    merged["leagues"] = entries
+
+    return merged, changes
+
+
+def record_pull_request(records, url, league_ids):
+    """
+    Writes the pull request's URL onto the resolution records for the leagues it
+    proposes, and returns `(records, changed)`.
+
+    `changed` is what stops a commit being made for nothing: the file is
+    committed and pushed, and a run that re-derived the same answer would put a
+    commit in front of Wade every six hours saying nothing but the time of day.
+    """
+    named   = set(league_ids or ())
+    updated = []
+    changed = False
+
+    for record in records or []:
+        if record.get("league_id") in named and record.get("pull_request") != url:
+            record  = dict(record, pull_request=url)
+            changed = True
+
+        updated.append(record)
+
+    return updated, changed
 
 
 # %%

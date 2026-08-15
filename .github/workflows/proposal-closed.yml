@@ -1,0 +1,72 @@
+# The other half of the approval mechanism. See
+# `.scratch/tier1-pipeline-automation/15`.
+#
+# Merging a proposal needs no workflow at all: the merge puts the `active`
+# verdict on `master`, and the next six-hourly run fetches the league. **Closing
+# one is what needs recording** — otherwise the next run resolves the same event,
+# finds the same pending league, and proposes it again tomorrow morning.
+#
+# So a proposal closed without merging writes `rejected`, which is the verdict
+# that means "considered, and no". It stays reversible: one word in
+# `data/leagues.json` takes effect on the next run.
+
+name: Record a refused league
+
+on:
+  pull_request:
+    types: [closed]
+
+# The same group as the data push. This writes `master` too, and the one way
+# either job can lose work is running between the other's commit and its push.
+concurrency:
+  group: push-to-master
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  record:
+    # Closed and *not* merged, on the proposal branch. Every other pull request
+    # in this repository closes without this job doing anything.
+    if: >-
+      github.event.pull_request.merged == false &&
+      github.event.pull_request.head.ref == 'tier1-league-proposals'
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out master
+        uses: actions/checkout@v4
+        with:
+          # `ref`, explicitly: a `pull_request` event checks out the merge
+          # commit by default, and a closed-unmerged pull request may not have
+          # one. The verdict belongs on `master` in any case.
+          ref: master
+          # The whole history, because this rebases on the remote before it
+          # pushes — a data run may have landed while the tab was open.
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Identify the committer
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Record the refusal
+        # Through the environment rather than an argument: the body is text
+        # somebody else wrote, and interpolating it into a shell command is the
+        # injection this repository would deserve. Which leagues it proposed is
+        # read from the marker `core.proposal_marker` wrote into it.
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: python propose_coverage.py --reject

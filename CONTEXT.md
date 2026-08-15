@@ -123,6 +123,8 @@ The boundary is inclusive: matches are played on day one, so a gap on day one is
 
 **Awaiting a verdict** — a league the resolver mapped to a Tier 1 event whose ledger verdict is neither `active` nor `rejected`. Distinct from *awaiting resolution* below: that is about finding the league, this is about deciding to cover it. The decision is Wade's and is taken by merging a pull request, so the dashboard reports this queue and never writes to it.
 
+**Coverage proposal** — the pull request that puts an *awaiting a verdict* league to Wade. It changes one line of the ledger, from `pending` to `active`, and carries the evidence for the decision: the event and its window, the league id and name, the match count, the team-overlap share, whether the window was contested, and the candidates that lost. **Merging it is approval; closing it is rejection**, which records `rejected` so the league is never proposed again. There is one at a time — a second detected league updates the open one — and a run that finds nothing new opens none. A *known gap* is never proposed: there is no ledger line to change.
+
 **Awaiting resolution** — an event that has started, that the ledger does not yet map, and that began within the last year. These are the only events that cost API calls: they set how far back the run walks OpenDota's pro match list, and when there are none the resolver makes no OpenDota calls at all.
 
 The year is a **lookback horizon**, not a tidy-up. Liquipedia's calendar reaches back to 2005 and this project has never mapped most of it, so without a horizon every event ever held is awaiting resolution and the first run walks twenty years of pro matches. Auditing the back catalogue is a deliberate, separate pass — the **coverage audit** below.

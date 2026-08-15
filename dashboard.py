@@ -26,9 +26,9 @@ ANON_NAMES = {"Radiant", "Dire"}
 # Where a proposed league is approved. Approval is merging a pull request, which
 # is deliberately the only way: this app is public and deployed from git with an
 # ephemeral filesystem, so an approve button here would mean a repository write
-# token in a public app. Until `tier1-pipeline-automation/15` records the URL of
-# the specific pull request on each record, this is the honest link — the list
-# the proposal will appear in.
+# token in a public app. Since `tier1-pipeline-automation/15` a proposed league
+# carries the URL of its own pull request, and this is the fallback for a record
+# written before that — the honest link, being the list it will appear in.
 REPO_PULLS_URL = "https://github.com/Wadith-ops/dota2-pro-match-dashboard/pulls"
 
 LIQUIPEDIA_TIER1_URL = "https://liquipedia.net/dota2/Tier_1_Tournaments"
@@ -436,10 +436,11 @@ def upcoming_tab() -> None:
                 "Review": record["pull_request"] or REPO_PULLS_URL,
             } for record in pending])
 
-            # Until `15` records the URL of the pull request that proposes a
-            # league, the link is the repository's open pull requests and the
-            # label says exactly that. Calling a list of every open PR "the pull
-            # request" would be the tab making a claim it cannot keep.
+            # Where no pull request has been recorded — a proposal the run has
+            # not opened yet, or a record written before `15` — the link is the
+            # repository's open pull requests and the label says exactly that.
+            # Calling a list of every open PR "the pull request" would be the
+            # tab making a claim it cannot keep.
             proposed = any(record["pull_request"] for record in pending)
 
             st.dataframe(

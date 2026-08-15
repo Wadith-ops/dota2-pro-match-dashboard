@@ -30,6 +30,12 @@ concurrency:
 
 permissions:
   contents: write
+  # For the proposal branch's pull request (issue 15). Note the repository
+  # setting this depends on: Settings → Actions → General → "Allow GitHub
+  # Actions to create and approve pull requests". Without it `gh pr create`
+  # fails with 403 and the run says so — the data push has already happened by
+  # then, so a refusal here costs a proposal, never a fetch.
+  pull-requests: write
 
 jobs:
   update:
@@ -89,6 +95,18 @@ jobs:
       - name: Fetch new matches and push
         shell: bash
         run: python auto_update.py 2>&1 | tee "$RUNNER_TEMP/update.log"
+
+      - name: Propose any league awaiting a verdict
+        # The last mile of the resolver: a league it recognised that nobody has
+        # judged becomes a pull request rather than an ATTENTION line nobody
+        # reads. Runs after the push because it reads what that run wrote, and
+        # opens nothing at all when there is nothing new — which is most runs.
+        #
+        # It pushes its own branch and never `master`'s data, so a failure here
+        # cannot lose a match: by this point the data is already committed.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python propose_coverage.py
 
       - name: Save the run's checkpoints
         # `always()`, because a run that fetched half a tournament and then fell
