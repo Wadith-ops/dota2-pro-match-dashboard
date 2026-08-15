@@ -10066,6 +10066,16 @@
     {"league_id": 20110, "name": "The Interlocal Summer 2026", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20112, "name": "NEXUS SERIES II", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20108, "name": "Goat Dota League", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20109, "name": "The Interlocal Summer 2026", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20109, "name": "The Interlocal Summer 2026", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 16564, "name": "League of Spirits", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20015, "name": "Phoenix Season 5 Main Division", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20017, "name": "Phoenix Season 5 Adept Division", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20018, "name": "Phoenix Season 5 Intermediate Division", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20019, "name": "Phoenix Season 5 Premier Division", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20020, "name": "Phoenix Season 5 Upper Division", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20116, "name": "Sanguihouse 26-27", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20117, "name": "ZC - Zanas Cup XIV - 14 Edição", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20118, "name": "Esports VK IT Series 2026", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20119, "name": "Polish Dota2 Inhouse Sezon 1", "tier1_event": null, "verdict": "pending"}
   ]
 }
