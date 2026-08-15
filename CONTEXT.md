@@ -28,7 +28,7 @@ The consequence: a distribution chart (histogram, box, violin) over a match-leve
 
 Called a **tournament** in the dashboard UI; *league* is the API's word and the column name (`league_name`). Both refer to the same thing.
 
-**Ledger** — `data/leagues.json`, the record of every league OpenDota knows about and this project's verdict on each: `active`, `rejected` or `pending`. It replaced the hardcoded `ALL_LEAGUES` dict so that an excluded league is *visibly excluded* rather than merely absent — the distinction whose absence hid the Esports World Cup for two months. Verdicts are reversible: changing one word covers or drops a tournament on the next run. 10,050 leagues today, 15 of them active.
+**Ledger** — `data/leagues.json`, the record of every league OpenDota knows about and this project's verdict on each: `active`, `rejected` or `pending`. It replaced the hardcoded `ALL_LEAGUES` dict so that an excluded league is *visibly excluded* rather than merely absent — the distinction whose absence hid the Esports World Cup for two months. Verdicts are reversible: changing one word covers or drops a tournament on the next run. 10,074 leagues today — 15 active, 24 `pending` and the rest rejected. Since the approval workflow, a `pending` league the resolver has matched to a Tier 1 event is proposed as a **coverage proposal** rather than waiting to be noticed; the 24 sitting there now are leagues no Tier 1 event claims.
 
 **Verdict** — what the ledger says about a league. **`active`** is fetched. **`rejected`** is a decision on record not to cover it — the great majority, and the state that makes absence legible. **`pending`** is a league OpenDota has listed since the ledger was seeded, awaiting a verdict; it is the only state that means "nobody has looked at this yet", which is why nothing is ever *seeded* pending.
 
@@ -202,7 +202,7 @@ The authoritative list is the `active` entries in `data/leagues.json`; this tabl
 | 20009 | 1win Essence II             |
 | 19719 | The International 2026      |
 
-The International 2026 started on 13 Aug 2026 and its first 49 matches arrived on the 14th, taking the dataset to 1,871 across all 15 leagues. It was configured months ahead and held **zero matches** until then — a configured league with no matches is normal, not a fault, and it is what made the pickup automatic rather than something anybody had to remember.
+The International 2026 started on 13 Aug 2026 and its first 49 matches arrived on the 14th, taking the dataset to 1,871 across all 15 leagues; it stands at 63 matches and 1,885 as of 15 Aug 2026. It was configured months ahead and held **zero matches** until then — a configured league with no matches is normal, not a fault, and it is what made the pickup automatic rather than something anybody had to remember.
 
 A league's **name here is the name the dashboard shows**, and it comes from the ledger rather than from OpenDota — which calls league 17419 "SLAM IV" where the dataset has said "Slam IV" for 96 matches. The pipeline writes the ledger's name onto every match row as `league_name`, so changing it in the ledger renames the tournament everywhere the next time the CSV is rebuilt, and leaving it to OpenDota would let a rebrand split one tournament into two.
 

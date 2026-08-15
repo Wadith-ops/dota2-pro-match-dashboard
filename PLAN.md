@@ -78,9 +78,13 @@ These changes don't add new data — they reframe existing aggregates as **time 
 ---
 
 ## Phase 4: Pipeline Automation
-**Status: unblocked — see `tier1-pipeline-automation/13`**
+**Status: ✅ Complete — shipped 2026-08-15**
 
-### What happens today (scheduled local runs)
+`.github/workflows/update-data.yml` runs `auto_update.py` every six hours and on demand; the workstation's scheduled task is retired, so there is exactly one unattended writer. `tests.yml` runs the offline suite on every push and pull request. The last step of each run is `propose_coverage.py`: a Tier 1 league the resolver recognised that nobody has judged arrives as a pull request, where **merging is approval and closing is rejection** — `tier1-pipeline-automation/13` and `15`, ADR-0013.
+
+Coverage therefore runs end to end with no step that depends on remembering anything: Liquipedia's calendar is read, the event resolves to an OpenDota league by date window on the day of its first match, the proposal arrives as a pull request, and the verdict is recorded either way.
+
+### What it does each run
 `auto_update.py` runs the pipeline and pushes if anything changed:
 1. `opendota_pipeline.py` — fetches only new matches (checkpoint skips already-fetched IDs), appending one **Standard record** per match to `data/matches_standard.jsonl`
 2. `build_dataframe()` — regenerates `matches_flat.csv` from that store
@@ -89,4 +93,6 @@ These changes don't add new data — they reframe existing aggregates as **time 
 ### Why it was deferred, and why that reason is gone
 The blocker was the 928 MB `data/matches.json`: a GitHub Actions runner starts without it, so the pipeline would have re-fetched the whole back catalogue every run. Options B (Git LFS) and C (cloud storage) were both ways to carry that file to CI.
 
-Neither is needed. The artifact split (ADR-0002, ADR-0010) made the serving path read a 37.5 MB committed store instead, and `tier1-pipeline-automation/11` deleted the raw file. A runner clones what it needs. Moving to GitHub Actions is now `13`, and its remaining prerequisite is `12` — surviving network failures — not storage.
+Neither was needed. The artifact split (ADR-0002, ADR-0010) made the serving path read a 37.5 MB committed store instead, and `tier1-pipeline-automation/11` deleted the raw file. A runner clones what it needs.
+
+With Phase 4 closed, **Phase 3 is the next work**, along with the hotfix buckets `16` recorded and nothing yet surfaces.
