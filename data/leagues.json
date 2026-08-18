@@ -10080,6 +10080,10 @@
     {"league_id": 20120, "name": "Dota2Brasil.com", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20121, "name": "第五届和谐号杯", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20122, "name": "ChromeX WW LAN", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20124, "name": "Ukrainian Dota League S4", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20124, "name": "Ukrainian Dota League S4", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20126, "name": "LIGA GOJEK DOTA TERBAIK SEPANJANG MASA", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20127, "name": "CARL DOTA TOURNAMENT SEASON 7", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20128, "name": "BROOD CUP", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20129, "name": "MMM-House: Season 5", "tier1_event": null, "verdict": "pending"}
   ]
 }
