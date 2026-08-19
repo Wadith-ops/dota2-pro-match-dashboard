@@ -10084,6 +10084,10 @@
     {"league_id": 20126, "name": "LIGA GOJEK DOTA TERBAIK SEPANJANG MASA", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20127, "name": "CARL DOTA TOURNAMENT SEASON 7", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20128, "name": "BROOD CUP", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20129, "name": "MMM-House: Season 5", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20129, "name": "MMM-House: Season 5", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20078, "name": "Munaliiga Season 3", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20132, "name": "Friendly Lobbies", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20044, "name": "French Only League", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20131, "name": "Skewer Esports Season 7", "tier1_event": null, "verdict": "pending"}
   ]
 }
