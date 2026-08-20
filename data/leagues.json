@@ -10088,6 +10088,13 @@
     {"league_id": 20078, "name": "Munaliiga Season 3", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20132, "name": "Friendly Lobbies", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20044, "name": "French Only League", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20131, "name": "Skewer Esports Season 7", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20131, "name": "Skewer Esports Season 7", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20105, "name": "Boss Battle 2026", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20133, "name": "STARPETS League", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20134, "name": "ExitLag ChampZ: Dota 2", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20135, "name": "SkilloWatt Dota 2 CUP. Season 1", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20136, "name": "Турнир по Дота 2 от RIFTBORN 5x5", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20137, "name": "VOID CUP", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20139, "name": "VOID CUP 1X1", "tier1_event": null, "verdict": "pending"}
   ]
 }
