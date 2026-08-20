@@ -1932,3 +1932,8 @@ match_id,league_id,league_name,patch,patch_label,patch_hotfix,start_time,duratio
 8948235815,19719,The International 2026,7.41,7.41,7.41e,2026-08-16 06:50:04,2384,39.7,False,14,29,2,False,5017210,Team Resilience,7119388,Team Spirit,0,2,1371.0,dire,0,0,1,1,11,3,6,0,84.0,4,22.9,1.4,False,
 8955247801,19719,The International 2026,7.41,7.41,7.41e,2026-08-20 04:12:03,2646,44.1,False,18,40,2,False,10150413,Iron Wing,7119388,Team Spirit,0,2,1327.0,dire,0,0,0,1,10,3,6,0,98.0,1,22.1,1.6,False,
 8955197224,19719,The International 2026,7.41,7.41,7.41e,2026-08-20 02:36:29,3744,62.4,True,45,34,2,False,7119388,Team Spirit,10150413,Iron Wing,3,1,1255.0,radiant,0,0,1,1,5,11,0,6,5.0,7,20.9,0.1,False,
+8955653541,19719,The International 2026,7.41,7.41,7.41e,2026-08-20 11:56:03,2308,38.5,False,13,38,2,False,2163,Team Liquid,9823272,Team Yandex,0,1,1977.0,dire,0,0,0,0,11,1,6,0,419.0,9,33.0,7.0,False,
+8955549026,19719,The International 2026,7.41,7.41,7.41e,2026-08-20 10:29:28,3268,54.5,True,34,37,2,False,9823272,Team Yandex,2163,Team Liquid,0,3,1620.0,dire,0,0,0,2,11,8,6,2,209.0,4,27.0,3.5,False,
+8955456108,19719,The International 2026,7.41,7.41,7.41e,2026-08-20 09:05:47,1859,31.0,False,8,32,2,False,8255888,BoomBoys,9572001,TEAM VISION,0,1,1441.0,dire,0,0,0,0,6,2,0,0,12.0,7,24.0,0.2,False,
+8955383956,19719,The International 2026,7.41,7.41,7.41e,2026-08-20 07:44:22,3060,51.0,False,19,27,2,False,9572001,TEAM VISION,8255888,BoomBoys,0,3,1455.0,dire,0,0,1,0,9,5,6,0,,7,24.2,,False,
+8955304019,19719,The International 2026,7.41,7.41,7.41e,2026-08-20 05:48:16,4647,77.5,False,31,25,2,False,8255888,BoomBoys,9572001,TEAM VISION,3,2,1488.0,radiant,0,0,2,0,11,6,6,0,235.0,9,24.8,3.9,False,
