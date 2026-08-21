@@ -1948,3 +1948,7 @@ match_id,league_id,league_name,patch,patch_label,patch_hotfix,start_time,duratio
 8957086928,19719,The International 2026,7.41,7.41,7.41e,2026-08-21 08:52:43,2533,42.2,False,21,39,2,False,9247354,Team Falcons,2163,Team Liquid,0,2,1668.0,dire,0,0,1,0,9,3,5,0,51.0,2,27.8,0.8,False,
 8957013760,19719,The International 2026,7.41,7.41,7.41e,2026-08-21 07:45:40,2057,34.3,False,11,40,2,False,9247354,Team Falcons,2163,Team Liquid,0,1,1565.0,dire,0,0,0,1,7,2,2,0,395.0,2,26.1,6.6,False,
 8956943534,19719,The International 2026,7.41,7.41,7.41e,2026-08-21 06:16:16,3351,55.9,False,18,43,2,False,2163,Team Liquid,9247354,Team Falcons,0,3,1466.0,dire,0,0,0,3,11,3,6,0,132.0,9,24.4,2.2,False,
+8957890399,19719,The International 2026,7.41,7.41,7.41e,2026-08-21 17:26:56,3672,61.2,False,23,38,2,False,10136357,Nigma Galaxy ,9823272,Team Yandex,0,0,,,0,0,0,0,0,0,0,0,,0,,,True,no_objectives
+8957749452,19719,The International 2026,7.41,7.41,7.41e,2026-08-21 16:10:10,2688,44.8,False,14,52,2,False,10136357,Nigma Galaxy ,9823272,Team Yandex,0,2,2024.0,dire,0,0,0,1,10,3,6,0,-43.0,5,33.7,-0.7,False,
+8957527957,19719,The International 2026,7.41,7.41,7.41e,2026-08-21 14:12:01,4493,74.9,False,45,42,2,False,9823272,Team Yandex,10136357,Nigma Galaxy ,2,2,1878.0,radiant,1,0,0,0,9,7,6,2,161.0,6,31.3,2.7,False,
+8957364447,19719,The International 2026,7.41,7.41,7.41e,2026-08-21 12:34:27,2813,46.9,False,12,37,2,False,7119388,Team Spirit,9572001,TEAM VISION,0,2,1458.0,dire,1,0,0,0,7,3,4,0,119.0,3,24.3,2.0,False,
