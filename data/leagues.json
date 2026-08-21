@@ -3,8 +3,8 @@
   "source": "https://api.opendota.com/api/leagues",
   "seeded_on": "2026-08-10",
   "leagues": [
-    {"league_id": 17419, "name": "Slam IV", "tier1_event": "BLAST Slam IV", "verdict": "active"},
-    {"league_id": 17420, "name": "Slam V", "tier1_event": "BLAST Slam V", "verdict": "active"},
+    {"league_id": 17419, "name": "Slam IV", "tier1_event": "BLAST SLAM IV", "verdict": "active"},
+    {"league_id": 17420, "name": "Slam V", "tier1_event": "BLAST SLAM V", "verdict": "active"},
     {"league_id": 18863, "name": "FISSURE PLAYGROUND 2", "tier1_event": "FISSURE PLAYGROUND 2", "verdict": "active"},
     {"league_id": 18920, "name": "PGL Wallachia 2025 Season 6", "tier1_event": "PGL Wallachia Season 6", "verdict": "active"},
     {"league_id": 18988, "name": "DreamLeague Season 27", "tier1_event": "DreamLeague Season 27", "verdict": "active"},
@@ -10095,6 +10095,12 @@
     {"league_id": 20135, "name": "SkilloWatt Dota 2 CUP. Season 1", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20136, "name": "Турнир по Дота 2 от RIFTBORN 5x5", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20137, "name": "VOID CUP", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20139, "name": "VOID CUP 1X1", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20139, "name": "VOID CUP 1X1", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20141, "name": "Komus Corporate Esports II 2026", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20145, "name": "RES Unchained - A Blast Dota Slam IX Qualifier EU", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20142, "name": "RES Unchained - A Blast Dota Slam VIII Qualifier EU", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20125, "name": "Rostelecom CYBERLEAGUE 2026 ", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20143, "name": "RES Unchained - A Blast Dota Slam VIII Qualifier SEA", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20144, "name": "RES Unchained - A Blast Dota Slam IX Qualifier SEA", "tier1_event": null, "verdict": "pending"}
   ]
 }
