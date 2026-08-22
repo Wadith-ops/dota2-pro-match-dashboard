@@ -10101,6 +10101,7 @@
     {"league_id": 20142, "name": "RES Unchained - A Blast Dota Slam VIII Qualifier EU", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20125, "name": "Rostelecom CYBERLEAGUE 2026 ", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20143, "name": "RES Unchained - A Blast Dota Slam VIII Qualifier SEA", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20144, "name": "RES Unchained - A Blast Dota Slam IX Qualifier SEA", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20144, "name": "RES Unchained - A Blast Dota Slam IX Qualifier SEA", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20148, "name": "VOID CUP", "tier1_event": null, "verdict": "pending"}
   ]
 }
