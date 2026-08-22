@@ -1952,3 +1952,6 @@ match_id,league_id,league_name,patch,patch_label,patch_hotfix,start_time,duratio
 8957749452,19719,The International 2026,7.41,7.41,7.41e,2026-08-21 16:10:10,2688,44.8,False,14,52,2,False,10136357,Nigma Galaxy ,9823272,Team Yandex,0,2,2024.0,dire,0,0,0,1,10,3,6,0,-43.0,5,33.7,-0.7,False,
 8957527957,19719,The International 2026,7.41,7.41,7.41e,2026-08-21 14:12:01,4493,74.9,False,45,42,2,False,9823272,Team Yandex,10136357,Nigma Galaxy ,2,2,1878.0,radiant,1,0,0,0,9,7,6,2,161.0,6,31.3,2.7,False,
 8957364447,19719,The International 2026,7.41,7.41,7.41e,2026-08-21 12:34:27,2813,46.9,False,12,37,2,False,7119388,Team Spirit,9572001,TEAM VISION,0,2,1458.0,dire,1,0,0,0,7,3,4,0,119.0,3,24.3,2.0,False,
+8958607830,19719,The International 2026,7.41,7.41,7.41e,2026-08-22 05:02:28,2338,39.0,True,14,13,2,False,8255888,BoomBoys,10136357,Nigma Galaxy ,1,1,1381.0,dire,0,0,1,0,4,9,0,4,122.0,5,23.0,2.0,False,
+8958538533,19719,The International 2026,7.41,7.41,7.41e,2026-08-22 03:36:31,2601,43.4,True,31,18,2,False,7119388,Team Spirit,2163,Team Liquid,2,0,1498.0,radiant,1,0,0,3,3,11,0,6,-48.0,1,25.0,-0.8,False,
+8958478716,19719,The International 2026,7.41,7.41,7.41e,2026-08-22 02:12:24,2974,49.6,False,20,33,2,False,2163,Team Liquid,7119388,Team Spirit,0,3,1550.0,dire,0,0,0,2,11,3,6,0,23.0,3,25.8,0.4,False,
