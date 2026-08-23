@@ -10102,6 +10102,9 @@
     {"league_id": 20125, "name": "Rostelecom CYBERLEAGUE 2026 ", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20143, "name": "RES Unchained - A Blast Dota Slam VIII Qualifier SEA", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20144, "name": "RES Unchained - A Blast Dota Slam IX Qualifier SEA", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20148, "name": "VOID CUP", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20148, "name": "VOID CUP", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20150, "name": "狗王争霸", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20151, "name": "Phoenix Dota 2027", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20152, "name": "WAIFUS CUP SEASON 8", "tier1_event": null, "verdict": "pending"}
   ]
 }
