@@ -10105,6 +10105,11 @@
     {"league_id": 20148, "name": "VOID CUP", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20150, "name": "狗王争霸", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20151, "name": "Phoenix Dota 2027", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20152, "name": "WAIFUS CUP SEASON 8", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20152, "name": "WAIFUS CUP SEASON 8", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20138, "name": "第十届下分杯", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20146, "name": "LPU-St. Cabrini Dota 2 Collegiate Cup", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20149, "name": "Ameli Members Only IV", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20153, "name": "Test Tournament", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20154, "name": "POOF Return Cup", "tier1_event": null, "verdict": "pending"}
   ]
 }
