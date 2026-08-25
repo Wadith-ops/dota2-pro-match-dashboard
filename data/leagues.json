@@ -10110,6 +10110,7 @@
     {"league_id": 20146, "name": "LPU-St. Cabrini Dota 2 Collegiate Cup", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20149, "name": "Ameli Members Only IV", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20153, "name": "Test Tournament", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20154, "name": "POOF Return Cup", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20154, "name": "POOF Return Cup", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20156, "name": "FQL №10", "tier1_event": null, "verdict": "pending"}
   ]
 }
