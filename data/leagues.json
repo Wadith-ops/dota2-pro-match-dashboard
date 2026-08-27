@@ -10115,6 +10115,10 @@
     {"league_id": 19975, "name": "Пульсар • Сибирский КиберТурнир Сбера", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20158, "name": "Goat Dota League", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20159, "name": "WINLINE Star Series Season 4", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20160, "name": "Vafelka  tournament", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20160, "name": "Vafelka  tournament", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20162, "name": "Kanaliiga Season 16", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20164, "name": "YCS ver.2", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20163, "name": "Kanaliiga Season 16 Lower", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20165, "name": "Winline Mixer Cup ", "tier1_event": null, "verdict": "pending"}
   ]
 }
