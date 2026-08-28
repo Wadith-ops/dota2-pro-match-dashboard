@@ -10119,6 +10119,8 @@
     {"league_id": 20162, "name": "Kanaliiga Season 16", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20164, "name": "YCS ver.2", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20163, "name": "Kanaliiga Season 16 Lower", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20165, "name": "Winline Mixer Cup ", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20165, "name": "Winline Mixer Cup ", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20140, "name": "新和联胜（Dota2）", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20168, "name": "Team Spirit Academy Selection 2026", "tier1_event": null, "verdict": "pending"}
   ]
 }
