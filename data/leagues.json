@@ -10121,6 +10121,12 @@
     {"league_id": 20163, "name": "Kanaliiga Season 16 Lower", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20165, "name": "Winline Mixer Cup ", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20140, "name": "新和联胜（Dota2）", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20168, "name": "Team Spirit Academy Selection 2026", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20168, "name": "Team Spirit Academy Selection 2026", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20176, "name": "BETBOOM Streamers Battle Dota 15", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20174, "name": "BETBOOM Streamers Battle Dota 15", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20169, "name": "BLAST Slam VII China Qualifier", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20170, "name": "新和电竞 DOTA2 联赛 Xinhe League", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20172, "name": "新和电竞联赛 Xinhe League", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20175, "name": "Sentinel Open Series", "tier1_event": null, "verdict": "pending"}
   ]
 }
