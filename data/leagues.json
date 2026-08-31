@@ -10129,6 +10129,11 @@
     {"league_id": 20172, "name": "新和电竞联赛 Xinhe League", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20175, "name": "Sentinel Open Series", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20178, "name": "The Interchillional", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20179, "name": "RZN", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20179, "name": "RZN", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20186, "name": "MACAN CUP 2026", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20166, "name": "Ascension League", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20180, "name": "第二届1001对黑杯", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20182, "name": "Test 123", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20185, "name": "DPL 3 Summer 2026", "tier1_event": null, "verdict": "pending"}
   ]
 }
