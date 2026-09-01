@@ -10134,6 +10134,9 @@
     {"league_id": 20166, "name": "Ascension League", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20180, "name": "第二届1001对黑杯", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20182, "name": "Test 123", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20185, "name": "DPL 3 Summer 2026", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20185, "name": "DPL 3 Summer 2026", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20177, "name": "1win Essence III", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20187, "name": "DPL Closes S3", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20188, "name": "BLAST Slam VIII China Qualifier", "tier1_event": null, "verdict": "pending"}
   ]
 }
