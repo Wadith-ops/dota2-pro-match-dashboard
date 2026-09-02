@@ -10137,6 +10137,15 @@
     {"league_id": 20185, "name": "DPL 3 Summer 2026", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20177, "name": "1win Essence III", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20187, "name": "DPL Closes S3", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20188, "name": "BLAST Slam VIII China Qualifier", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20188, "name": "BLAST Slam VIII China Qualifier", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20161, "name": "Vafelka tournament", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20189, "name": "睾手杯", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20190, "name": "Saturday Evening Amateur League Season 3", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20192, "name": "VERSUS DOTA 2 CUP SEASON 0", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20193, "name": "ChromeX WW LAN #2", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20194, "name": "Selectel Cyber Cup", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20195, "name": "liga FANTASY by LIONEL DOTA", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20196, "name": "El Coliseo de Benjaz 2", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20197, "name": "LDEL #1 — Latin Dota Elite Cup", "tier1_event": null, "verdict": "pending"}
   ]
 }
