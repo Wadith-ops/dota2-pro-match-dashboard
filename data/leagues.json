@@ -10146,6 +10146,11 @@
     {"league_id": 20194, "name": "Selectel Cyber Cup", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20195, "name": "liga FANTASY by LIONEL DOTA", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20196, "name": "El Coliseo de Benjaz 2", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20197, "name": "LDEL #1 — Latin Dota Elite Cup", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20197, "name": "LDEL #1 — Latin Dota Elite Cup", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20200, "name": "DPL #6", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20201, "name": "DPL Golden Crown", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20191, "name": "Linken's Sphere 5x5 League Season 9", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20198, "name": "DPL #4", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20199, "name": "DPL #5", "tier1_event": null, "verdict": "pending"}
   ]
 }
