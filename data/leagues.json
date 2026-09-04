@@ -10151,6 +10151,9 @@
     {"league_id": 20201, "name": "DPL Golden Crown", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20191, "name": "Linken's Sphere 5x5 League Season 9", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20198, "name": "DPL #4", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20199, "name": "DPL #5", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20199, "name": "DPL #5", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20167, "name": "Persona Tier", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20202, "name": "Litla-Kraftvéladeildin 3", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20203, "name": "UESF Ukrainian Championship 2026 Stage 4", "tier1_event": null, "verdict": "pending"}
   ]
 }
