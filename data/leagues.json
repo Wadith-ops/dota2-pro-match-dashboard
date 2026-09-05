@@ -10154,6 +10154,10 @@
     {"league_id": 20199, "name": "DPL #5", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20167, "name": "Persona Tier", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20202, "name": "Litla-Kraftvéladeildin 3", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20203, "name": "UESF Ukrainian Championship 2026 Stage 4", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20203, "name": "UESF Ukrainian Championship 2026 Stage 4", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 19102, "name": "BLAST SLAM VIII", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 19778, "name": "test", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20206, "name": "NEXUS SERIES I", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20207, "name": "Duwelo Lobby League", "tier1_event": null, "verdict": "pending"}
   ]
 }
