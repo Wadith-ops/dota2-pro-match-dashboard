@@ -10158,6 +10158,9 @@
     {"league_id": 19102, "name": "BLAST SLAM VIII", "tier1_event": null, "verdict": "pending"},
     {"league_id": 19778, "name": "test", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20206, "name": "NEXUS SERIES I", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20207, "name": "Duwelo Lobby League", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20207, "name": "Duwelo Lobby League", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20209, "name": "Oliver's EU Dota League", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20210, "name": "Jabalu PH week 10 Dota 2 Tournament", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20212, "name": "Esportsprocircuit", "tier1_event": null, "verdict": "pending"}
   ]
 }
