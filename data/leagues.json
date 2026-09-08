@@ -10162,6 +10162,10 @@
     {"league_id": 20209, "name": "Oliver's EU Dota League", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20210, "name": "Jabalu PH week 10 Dota 2 Tournament", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20212, "name": "Esportsprocircuit", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20214, "name": "JABALU PH EXECUTIVE CUP", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20214, "name": "JABALU PH EXECUTIVE CUP", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20213, "name": "Haste 2nd Major Tournament", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20215, "name": "Titancup season 6", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20216, "name": "1001对黑杯", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20217, "name": "ForgeInLeague REBORN", "tier1_event": null, "verdict": "pending"}
   ]
 }
