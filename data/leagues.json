@@ -10166,6 +10166,13 @@
     {"league_id": 20213, "name": "Haste 2nd Major Tournament", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20215, "name": "Titancup season 6", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20216, "name": "1001对黑杯", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20217, "name": "ForgeInLeague REBORN", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20217, "name": "ForgeInLeague REBORN", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20218, "name": "帕鲁杯帕鲁大陆大乱斗", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20219, "name": "星动次元杯", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20220, "name": "The Hope Hotpot league", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20221, "name": "LS CD Fastcup #7", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20222, "name": "LS SD Fastcup #2", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20223, "name": "DFC | Tournament", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20224, "name": "Ísland Dota Inhouse Vetur 2026-27", "tier1_event": null, "verdict": "pending"}
   ]
 }
