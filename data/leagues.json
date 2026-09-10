@@ -10173,6 +10173,11 @@
     {"league_id": 20221, "name": "LS CD Fastcup #7", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20222, "name": "LS SD Fastcup #2", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20223, "name": "DFC | Tournament", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20224, "name": "Ísland Dota Inhouse Vetur 2026-27", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20224, "name": "Ísland Dota Inhouse Vetur 2026-27", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20225, "name": "小天才杯", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20227, "name": "阿哇杯", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20226, "name": "IMMORTALITY: The First Dynasty ", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20229, "name": "bottle cup", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20230, "name": "Pavaga Dota League Season 6", "tier1_event": null, "verdict": "pending"}
   ]
 }
