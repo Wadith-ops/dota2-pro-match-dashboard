@@ -10178,6 +10178,13 @@
     {"league_id": 20227, "name": "阿哇杯", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20226, "name": "IMMORTALITY: The First Dynasty ", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20229, "name": "bottle cup", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20230, "name": "Pavaga Dota League Season 6", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20230, "name": "Pavaga Dota League Season 6", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20157, "name": "众筹杯", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20237, "name": "1rep0rt Tournament", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20234, "name": "吃可爱杯-长不大赛S11", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20236, "name": "Fall Mercury League ", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20231, "name": "Liga RDC v8.2", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20232, "name": "Friendly Cup Dota 2 : Season 4", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20233, "name": "杭州富阳DOTA喜爱者杯", "tier1_event": null, "verdict": "pending"}
   ]
 }
