@@ -10185,6 +10185,15 @@
     {"league_id": 20236, "name": "Fall Mercury League ", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20231, "name": "Liga RDC v8.2", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20232, "name": "Friendly Cup Dota 2 : Season 4", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20233, "name": "杭州富阳DOTA喜爱者杯", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20233, "name": "杭州富阳DOTA喜爱者杯", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20240, "name": "PWdodo", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20246, "name": "Core League x Cyberhub | Lviv", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20242, "name": "KaaosCup Division 2 | Qualifier 3", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20243, "name": "KaaosCup Division 2 | Qualifier 4", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20244, "name": "6ª LIGA DECAN DIVISÃO 2", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20245, "name": "仇人杯", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20208, "name": "BLAST SLAM IX", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20239, "name": "Efes Cyber Cup 2026", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20241, "name": "KaaosCup Division 2 | Qualifier 2", "tier1_event": null, "verdict": "pending"}
   ]
 }
