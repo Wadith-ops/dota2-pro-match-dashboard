@@ -10194,6 +10194,15 @@
     {"league_id": 20245, "name": "仇人杯", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20208, "name": "BLAST SLAM IX", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20239, "name": "Efes Cyber Cup 2026", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20241, "name": "KaaosCup Division 2 | Qualifier 2", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20241, "name": "KaaosCup Division 2 | Qualifier 2", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20248, "name": "1rep0rt Tournament", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20249, "name": " AnyLvL × Bedlam: COLLISION", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20250, "name": "BLAST Slam IX China Qualifier", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20252, "name": "IDL MIDAS MODE", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20253, "name": "IDL Season 45", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20254, "name": "Swiss Dota Cup VI", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20235, "name": "HATER ZDES' CUP: SEASON 4. DIVISION 2", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20238, "name": "VAL CUP", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 19655, "name": "Strawberry Swishouse ", "tier1_event": null, "verdict": "pending"}
   ]
 }
