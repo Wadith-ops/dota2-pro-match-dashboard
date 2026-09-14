@@ -10207,6 +10207,7 @@
     {"league_id": 20256, "name": "BeReddy Season 8, Cup", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20255, "name": "BeReddy Season 8, Championship", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20257, "name": "Molodoy Lil Young`s 322 tournament", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20258, "name": "Kobold League V", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20258, "name": "Kobold League V", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20279, "name": "PGL Wallachia 2026 Season 9", "tier1_event": null, "verdict": "pending"}
   ]
 }
