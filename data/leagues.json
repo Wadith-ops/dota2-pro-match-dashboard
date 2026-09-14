@@ -10203,6 +10203,10 @@
     {"league_id": 20254, "name": "Swiss Dota Cup VI", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20235, "name": "HATER ZDES' CUP: SEASON 4. DIVISION 2", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20238, "name": "VAL CUP", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 19655, "name": "Strawberry Swishouse ", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 19655, "name": "Strawberry Swishouse ", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20256, "name": "BeReddy Season 8, Cup", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20255, "name": "BeReddy Season 8, Championship", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20257, "name": "Molodoy Lil Young`s 322 tournament", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20258, "name": "Kobold League V", "tier1_event": null, "verdict": "pending"}
   ]
 }
