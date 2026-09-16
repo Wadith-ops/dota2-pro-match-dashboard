@@ -10211,6 +10211,15 @@
     {"league_id": 20279, "name": "PGL Wallachia 2026 Season 9", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20260, "name": "明堂solo赛", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20263, "name": "Открытый чемпионат среди команд ТЭК г. Новый Уренгой", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20264, "name": "GG League - Saison 10", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20264, "name": "GG League - Saison 10", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 19780, "name": "test", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20247, "name": "Pakistan Dota Masters - Season 3", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20265, "name": "EnergoBOMJprime_2026", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20266, "name": "Студенческая Киберлига ВТБ", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20267, "name": "2026年刀塔小油条友谊赛", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20268, "name": "Лига Лидеры Бизнеса", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20270, "name": "Test SS", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20271, "name": "Get Good League Season 3", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20272, "name": "O Intranacional 3", "tier1_event": null, "verdict": "pending"}
   ]
 }
