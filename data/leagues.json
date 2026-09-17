@@ -10220,6 +10220,14 @@
     {"league_id": 20268, "name": "Лига Лидеры Бизнеса", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20270, "name": "Test SS", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20271, "name": "Get Good League Season 3", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20272, "name": "O Intranacional 3", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20272, "name": "O Intranacional 3", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 13292, "name": "Snack Gaming Matchs", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20273, "name": "Отборочные соревнования РТУ МИРЭА 26/27 Осень ", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20274, "name": "BOFU", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20275, "name": "Ultras Dota Pro League  2026-2027", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20261, "name": "中军杯", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20276, "name": "European Pro League  2026-2027 Season", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20277, "name": "EPL World Series: Southeast Asia 2026-2027 Season ", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20278, "name": "EPL Championship 2026-2027", "tier1_event": null, "verdict": "pending"}
   ]
 }
