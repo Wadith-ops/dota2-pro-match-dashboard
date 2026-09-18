@@ -10228,6 +10228,15 @@
     {"league_id": 20261, "name": "中军杯", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20276, "name": "European Pro League  2026-2027 Season", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20277, "name": "EPL World Series: Southeast Asia 2026-2027 Season ", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20278, "name": "EPL Championship 2026-2027", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20278, "name": "EPL Championship 2026-2027", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20259, "name": "Knight Cup", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20280, "name": "能量蓄电池中秋杯", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20281, "name": "能量蓄电池内战专用", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20282, "name": "Ancient Ascension", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20283, "name": "BCL Fall 2026", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20284, "name": "The Secret Shop Tournament Season 1", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20285, "name": "League of Lads Season 22", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20286, "name": "LDEL #1 — Latin Dota Elite Cup", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20057, "name": "ArgenDota", "tier1_event": null, "verdict": "pending"}
   ]
 }
