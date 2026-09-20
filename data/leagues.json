@@ -10239,6 +10239,9 @@
     {"league_id": 20286, "name": "LDEL #1 — Latin Dota Elite Cup", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20057, "name": "ArgenDota", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20289, "name": "PARI Super Mixer", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20290, "name": "Отборочные соревнования РТУ МИРЭА 26/27 Осень", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20290, "name": "Отборочные соревнования РТУ МИРЭА 26/27 Осень", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20298, "name": "Dotahub continuation league", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20295, "name": "BATTLEGROUNDS WEEKLY TOURNAMENT", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20297, "name": "Nexora: Bidding League Season-1", "tier1_event": null, "verdict": "pending"}
   ]
 }
