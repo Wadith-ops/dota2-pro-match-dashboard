@@ -10244,6 +10244,14 @@
     {"league_id": 20295, "name": "BATTLEGROUNDS WEEKLY TOURNAMENT", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20297, "name": "Nexora: Bidding League Season-1", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20299, "name": "第三届卞分杯", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20301, "name": "POLZOVATELI PRIME ЛУЧШАЯ КОМАНДА", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20301, "name": "POLZOVATELI PRIME ЛУЧШАЯ КОМАНДА", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20302, "name": "电竞GO社区赛2026-S2", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20300, "name": "E-Sport.GG", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20304, "name": "GL.CN", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20305, "name": "GL.CN", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20307, "name": "CML OCTOBER TURBO", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20308, "name": "CML OCTOBER CAPTAINS MODE", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20310, "name": "NEVA Season 2027", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20311, "name": "Syrian Digital League finals", "tier1_event": null, "verdict": "pending"}
   ]
 }
