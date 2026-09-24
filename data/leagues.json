@@ -10252,6 +10252,10 @@
     {"league_id": 20307, "name": "CML OCTOBER TURBO", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20308, "name": "CML OCTOBER CAPTAINS MODE", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20310, "name": "NEVA Season 2027", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20311, "name": "Syrian Digital League finals", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20311, "name": "Syrian Digital League finals", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 16876, "name": "dota2小酒馆S1定级赛", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20205, "name": "Get Ganked Inhouse", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20309, "name": "八零杯", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20312, "name": "Recruit Tourik", "tier1_event": null, "verdict": "pending"}
   ]
 }
