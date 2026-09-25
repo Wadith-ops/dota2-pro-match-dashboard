@@ -10256,6 +10256,12 @@
     {"league_id": 16876, "name": "dota2小酒馆S1定级赛", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20205, "name": "Get Ganked Inhouse", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20309, "name": "八零杯", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20312, "name": "Recruit Tourik", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20312, "name": "Recruit Tourik", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20314, "name": "Petushki Battle Season 1", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20313, "name": "1488", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20315, "name": "Petushki Battle", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20316, "name": "LAN-часть отборочных соревнования РТУ МИРЭА 26/27 Осень", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20318, "name": "BattleStackDota2 League", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20319, "name": "Eclipse Contenders III", "tier1_event": null, "verdict": "pending"}
   ]
 }
