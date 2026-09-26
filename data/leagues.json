@@ -10262,6 +10262,15 @@
     {"league_id": 20315, "name": "Petushki Battle", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20316, "name": "LAN-часть отборочных соревнования РТУ МИРЭА 26/27 Осень", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20318, "name": "BattleStackDota2 League", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20319, "name": "Eclipse Contenders III", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20319, "name": "Eclipse Contenders III", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20063, "name": "“乡毋宁”内战交流赛", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20320, "name": "第一届靓仔杯国际邀请赛2026", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20321, "name": "BETER TEAMS CLASH: FIRST BLOOD", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20322, "name": "TRUE CUP", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20323, "name": "Mixed Shuffle", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20324, "name": "European Dota Community Inhouse", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20325, "name": "APPLE PRO DOTA LEAGUE", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20327, "name": "Apex Dota Circuit", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20328, "name": "МИДАС КАП сезон 1", "tier1_event": null, "verdict": "pending"}
   ]
 }
