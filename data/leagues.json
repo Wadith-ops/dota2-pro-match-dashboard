@@ -10271,6 +10271,10 @@
     {"league_id": 20324, "name": "European Dota Community Inhouse", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20325, "name": "APPLE PRO DOTA LEAGUE", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20327, "name": "Apex Dota Circuit", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20328, "name": "МИДАС КАП сезон 1", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20328, "name": "МИДАС КАП сезон 1", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20329, "name": "WINTER CUP 2027 SEASON 3", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20330, "name": "Apple pro dota league S1", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20331, "name": "Rumble in the Jungle VI", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20332, "name": "BOTB 9 IT LYCEUM", "tier1_event": null, "verdict": "pending"}
   ]
 }
