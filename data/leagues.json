@@ -10275,6 +10275,11 @@
     {"league_id": 20329, "name": "WINTER CUP 2027 SEASON 3", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20330, "name": "Apple pro dota league S1", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20331, "name": "Rumble in the Jungle VI", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20332, "name": "BOTB 9 IT LYCEUM", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20332, "name": "BOTB 9 IT LYCEUM", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20082, "name": "OBG", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20317, "name": "DESK CUP", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20335, "name": "ResoAI Tournaments", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20337, "name": "Clarity League - Season 18", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20338, "name": "5X5 Capitan Draft ROFL Edition", "tier1_event": null, "verdict": "pending"}
   ]
 }
