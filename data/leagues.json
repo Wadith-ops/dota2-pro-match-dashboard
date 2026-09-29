@@ -10280,6 +10280,9 @@
     {"league_id": 20317, "name": "DESK CUP", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20335, "name": "ResoAI Tournaments", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20337, "name": "Clarity League - Season 18", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20338, "name": "5X5 Capitan Draft ROFL Edition", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20338, "name": "5X5 Capitan Draft ROFL Edition", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 18685, "name": "clan war ", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20336, "name": "Liga The Rats S09", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20340, "name": "Copa San Pablo - Temporada 2026", "tier1_event": null, "verdict": "pending"}
   ]
 }
