@@ -10155,7 +10155,7 @@
     {"league_id": 20167, "name": "Persona Tier", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20202, "name": "Litla-Kraftvéladeildin 3", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20203, "name": "UESF Ukrainian Championship 2026 Stage 4", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 19102, "name": "BLAST SLAM VIII", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 19102, "name": "BLAST SLAM VIII", "tier1_event": "BLAST SLAM VIII", "verdict": "pending"},
     {"league_id": 19778, "name": "test", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20206, "name": "NEXUS SERIES I", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20207, "name": "Duwelo Lobby League", "tier1_event": null, "verdict": "pending"},
@@ -10283,6 +10283,22 @@
     {"league_id": 20338, "name": "5X5 Capitan Draft ROFL Edition", "tier1_event": null, "verdict": "pending"},
     {"league_id": 18685, "name": "clan war ", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20336, "name": "Liga The Rats S09", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20340, "name": "Copa San Pablo - Temporada 2026", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20340, "name": "Copa San Pablo - Temporada 2026", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 19541, "name": "LCS – ИЗМЕРИТЕЛЬ ЛЕГЕНДАРНОЙ СИЛЫ", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20345, "name": "BELASTING INVITATIONAL SEASON 1", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20269, "name": "BOTA TU GA", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20342, "name": "МИДАС КАП сезон 2", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20343, "name": "МИДАС КАП сезон 3", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20344, "name": "Mytona Practice League 2026", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20346, "name": "ICL — Season#2", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20347, "name": "RISE MIX CUP", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20348, "name": "深圳 DOTA2 社区联赛", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20349, "name": "BEDLAM: OCTOBER FEST", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20350, "name": "DPL#5", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20351, "name": "DPL#6", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20352, "name": "DPL #7", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20353, "name": "DPL Golden Crown 1", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20355, "name": "TRR Esports Season 8", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20356, "name": "Wangock", "tier1_event": null, "verdict": "pending"}
   ]
 }
