@@ -10299,6 +10299,15 @@
     {"league_id": 20352, "name": "DPL #7", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20353, "name": "DPL Golden Crown 1", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20355, "name": "TRR Esports Season 8", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20356, "name": "Wangock", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20356, "name": "Wangock", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20361, "name": "Внутривузовский турнир РТУ МИРЭА по Dota2", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20362, "name": "Father's Grave", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20363, "name": "[MGT] Fun tornament", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20364, "name": "The Final Showdown ", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20365, "name": "SIGNATURE FTS SCRIMS", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20291, "name": "XNN 文员大舞台", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20354, "name": "Barracuda Cup", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20358, "name": "Malaysia Dota 2 Turbo Leaderboard", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20360, "name": "КиберПеремена", "tier1_event": null, "verdict": "pending"}
   ]
 }
