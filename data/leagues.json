@@ -10308,6 +10308,10 @@
     {"league_id": 20291, "name": "XNN 文员大舞台", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20354, "name": "Barracuda Cup", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20358, "name": "Malaysia Dota 2 Turbo Leaderboard", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20360, "name": "КиберПеремена", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20360, "name": "КиберПеремена", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20366, "name": "dota2小酒馆S1", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20367, "name": "Efterårsturneringen ", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20369, "name": "Avito Cyber Cup 2026", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20370, "name": "Liga The Rats S10", "tier1_event": null, "verdict": "pending"}
   ]
 }
