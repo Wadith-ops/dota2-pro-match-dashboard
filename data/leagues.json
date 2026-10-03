@@ -10312,6 +10312,12 @@
     {"league_id": 20366, "name": "dota2小酒馆S1", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20367, "name": "Efterårsturneringen ", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20369, "name": "Avito Cyber Cup 2026", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20370, "name": "Liga The Rats S10", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20370, "name": "Liga The Rats S10", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20371, "name": "Megapizdilovo season 1", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20372, "name": "Pride Dota 2 — Temporada 2026/27", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20374, "name": "Eclipse Contenders IV", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20376, "name": "Blank league", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20377, "name": "Feel Like Pro | FLP #1", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20378, "name": "Papskaya Mogila", "tier1_event": null, "verdict": "pending"}
   ]
 }
