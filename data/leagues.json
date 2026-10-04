@@ -10318,6 +10318,9 @@
     {"league_id": 20374, "name": "Eclipse Contenders IV", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20376, "name": "Blank league", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20377, "name": "Feel Like Pro | FLP #1", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20378, "name": "Papskaya Mogila", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20378, "name": "Papskaya Mogila", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20379, "name": "BattleCoach", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20380, "name": "Nova Turnier Season 6", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20381, "name": "RD2L EU Season 34 SUN", "tier1_event": null, "verdict": "pending"}
   ]
 }
