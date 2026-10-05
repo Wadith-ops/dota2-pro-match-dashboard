@@ -10321,6 +10321,9 @@
     {"league_id": 20378, "name": "Papskaya Mogila", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20379, "name": "BattleCoach", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20380, "name": "Nova Turnier Season 6", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20381, "name": "RD2L EU Season 34 SUN", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20381, "name": "RD2L EU Season 34 SUN", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20383, "name": "BPC League Season 3", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20384, "name": "Cheese Inhouse League", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20387, "name": "DPL #8", "tier1_event": null, "verdict": "pending"}
   ]
 }
