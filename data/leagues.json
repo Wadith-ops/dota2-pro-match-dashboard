@@ -10326,6 +10326,11 @@
     {"league_id": 20384, "name": "Cheese Inhouse League", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20387, "name": "DPL #8", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20393, "name": "PARI Universe by FISSURE Closed Qualifiers ", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20395, "name": "PARI UNIVERSE by FISSURE", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20395, "name": "PARI UNIVERSE by FISSURE", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20334, "name": "NEXUS SERIES II", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20389, "name": "BLAST Slam IX China Qualifier", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20390, "name": "To the top", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20391, "name": "RD2L EU Season 34 Wed", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20392, "name": "Make Dota Great Again", "tier1_event": null, "verdict": "pending"}
   ]
 }
