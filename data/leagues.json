@@ -10325,6 +10325,7 @@
     {"league_id": 20383, "name": "BPC League Season 3", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20384, "name": "Cheese Inhouse League", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20387, "name": "DPL #8", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20393, "name": "PARI Universe by FISSURE Closed Qualifiers ", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20393, "name": "PARI Universe by FISSURE Closed Qualifiers ", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20395, "name": "PARI UNIVERSE by FISSURE", "tier1_event": null, "verdict": "pending"}
   ]
 }
