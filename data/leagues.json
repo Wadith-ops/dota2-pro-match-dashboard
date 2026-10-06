@@ -10331,6 +10331,7 @@
     {"league_id": 20389, "name": "BLAST Slam IX China Qualifier", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20390, "name": "To the top", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20391, "name": "RD2L EU Season 34 Wed", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20392, "name": "Make Dota Great Again", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20392, "name": "Make Dota Great Again", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20359, "name": "DreamLeague Season 30 Qualifiers", "tier1_event": null, "verdict": "pending"}
   ]
 }
