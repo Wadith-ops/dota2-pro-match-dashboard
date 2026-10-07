@@ -10332,6 +10332,10 @@
     {"league_id": 20390, "name": "To the top", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20391, "name": "RD2L EU Season 34 Wed", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20392, "name": "Make Dota Great Again", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20359, "name": "DreamLeague Season 30 Qualifiers", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20359, "name": "DreamLeague Season 30 Qualifiers", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20386, "name": "Skewer x Yarf Cup", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20394, "name": "ATOM.KLIK.BLK", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20397, "name": "LS Fastcup #14", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20398, "name": "Skewer x Yarf Cup", "tier1_event": null, "verdict": "pending"}
   ]
 }
