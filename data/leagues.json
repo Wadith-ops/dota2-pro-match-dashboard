@@ -10336,6 +10336,10 @@
     {"league_id": 20386, "name": "Skewer x Yarf Cup", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20394, "name": "ATOM.KLIK.BLK", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20397, "name": "LS Fastcup #14", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20398, "name": "Skewer x Yarf Cup", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20398, "name": "Skewer x Yarf Cup", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 18774, "name": "Удалить", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20396, "name": "新和电竞 DOTA2 联赛 Xinhe League", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20399, "name": "Cuenkox Arena", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20400, "name": "Polish Dota League Sezon 2", "tier1_event": null, "verdict": "pending"}
   ]
 }
