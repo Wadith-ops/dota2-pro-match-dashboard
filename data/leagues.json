@@ -10344,6 +10344,10 @@
     {"league_id": 20401, "name": "CyberDZM 2026", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20402, "name": "ATOM.KLIK.BLK", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20403, "name": "ATOM.KLIK.BLK", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20404, "name": "Make Dota Great Again", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20404, "name": "Make Dota Great Again", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20406, "name": "1win Streamers League #3", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20407, "name": "Copa RDC V5", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20408, "name": "REINCARNATION - D/A/CH Dota 2 by BEING ESPORTS Season 8", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20409, "name": "OpenCoachDota", "tier1_event": null, "verdict": "pending"}
   ]
 }
