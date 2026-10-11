@@ -10348,6 +10348,8 @@
     {"league_id": 20406, "name": "1win Streamers League #3", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20407, "name": "Copa RDC V5", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20408, "name": "REINCARNATION - D/A/CH Dota 2 by BEING ESPORTS Season 8", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20409, "name": "OpenCoachDota", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20409, "name": "OpenCoachDota", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20411, "name": "奇迹杯", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20412, "name": "Legacy League", "tier1_event": null, "verdict": "pending"}
   ]
 }
