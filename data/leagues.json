@@ -10350,6 +10350,10 @@
     {"league_id": 20408, "name": "REINCARNATION - D/A/CH Dota 2 by BEING ESPORTS Season 8", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20409, "name": "OpenCoachDota", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20411, "name": "奇迹杯", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20412, "name": "Legacy League", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20412, "name": "Legacy League", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20413, "name": "GGD2L season 2", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20415, "name": "Highground League", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20416, "name": "турнир пацанов", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20417, "name": "FONBET MEDIA ELEAGUE SEASON 5 DOTA2 2026", "tier1_event": null, "verdict": "pending"}
   ]
 }
