@@ -10358,6 +10358,8 @@
     {"league_id": 20418, "name": "qqq", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20419, "name": "Sky Fox Finals ", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20420, "name": "Under Realm Championship", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20421, "name": "POINT", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20421, "name": "POINT", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20423, "name": "RIFTLINE OPEN", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20424, "name": "Narod streamers", "tier1_event": null, "verdict": "pending"}
   ]
 }
