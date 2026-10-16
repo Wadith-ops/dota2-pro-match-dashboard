@@ -10360,6 +10360,11 @@
     {"league_id": 20420, "name": "Under Realm Championship", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20421, "name": "POINT", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20423, "name": "RIFTLINE OPEN", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20424, "name": "Narod streamers", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20424, "name": "Narod streamers", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20422, "name": "Upstars Cyber League: Dota 2", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20425, "name": "Megakill Perú", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20426, "name": "蔬菜dota联赛", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20427, "name": " 先锋杯", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20429, "name": "Eclipse Test League", "tier1_event": null, "verdict": "pending"}
   ]
 }
