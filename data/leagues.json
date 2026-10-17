@@ -10365,6 +10365,11 @@
     {"league_id": 20425, "name": "Megakill Perú", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20426, "name": "蔬菜dota联赛", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20427, "name": " 先锋杯", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20429, "name": "Eclipse Test League", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20429, "name": "Eclipse Test League", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20428, "name": "武汉酒馆杯", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20430, "name": "Carl Dota Oktober Ceria", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20431, "name": "BUZAR", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20432, "name": "qqq", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20433, "name": "QQCUP Season 1", "tier1_event": null, "verdict": "pending"}
   ]
 }
