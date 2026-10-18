@@ -10370,6 +10370,12 @@
     {"league_id": 20430, "name": "Carl Dota Oktober Ceria", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20431, "name": "BUZAR", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20432, "name": "qqq", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20433, "name": "QQCUP Season 1", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20433, "name": "QQCUP Season 1", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 19334, "name": "LEGACY CLASS TOURNAMENT", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20434, "name": "1x1 random cup", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20437, "name": "DOTA2老登俱乐部", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20436, "name": "老登娱乐俱乐部", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20438, "name": "Beta LAN 2026", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20439, "name": "Lithuanian Dota league", "tier1_event": null, "verdict": "pending"}
   ]
 }
