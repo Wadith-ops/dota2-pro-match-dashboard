@@ -10378,6 +10378,9 @@
     {"league_id": 20438, "name": "Beta LAN 2026", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20439, "name": "Lithuanian Dota league", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20441, "name": "第四届和谐号宝宝杯", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20443, "name": "ItchyBoy Season 4: Heavy is the head that wears the crown", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20443, "name": "ItchyBoy Season 4: Heavy is the head that wears the crown", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20445, "name": "Paralympics", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20449, "name": "DOTA老登娱乐俱乐部", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20451, "name": "Liga The Rats S11", "tier1_event": null, "verdict": "pending"}
   ]
 }
