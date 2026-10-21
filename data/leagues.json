@@ -10381,6 +10381,10 @@
     {"league_id": 20443, "name": "ItchyBoy Season 4: Heavy is the head that wears the crown", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20445, "name": "Paralympics", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20449, "name": "DOTA老登娱乐俱乐部", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20451, "name": "Liga The Rats S11", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20451, "name": "Liga The Rats S11", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20444, "name": "FinFun Cup", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20452, "name": "【遗迹】宝可梦-弗诺诺杯", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20453, "name": "LS CD Fastcup #8", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20454, "name": "One More: First Blood", "tier1_event": null, "verdict": "pending"}
   ]
 }
