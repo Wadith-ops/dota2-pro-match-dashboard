@@ -8819,7 +8819,7 @@
     {"league_id": 18628, "name": "MidInt", "tier1_event": null, "verdict": "rejected"},
     {"league_id": 18629, "name": "DreamLeague Season 27 Qualifiers", "tier1_event": null, "verdict": "rejected"},
     {"league_id": 18630, "name": "The InterWinslow 2025", "tier1_event": null, "verdict": "rejected"},
-    {"league_id": 18631, "name": "护鼠宝", "tier1_event": null, "verdict": "rejected"},
+    {"league_id": 18631, "name": "护鼠宝", "tier1_event": "PARI Universe", "verdict": "rejected"},
     {"league_id": 18632, "name": "牛马MAJOR", "tier1_event": null, "verdict": "rejected"},
     {"league_id": 18633, "name": "FISSURE Universe Episode 7", "tier1_event": null, "verdict": "rejected"},
     {"league_id": 18634, "name": "FISSURE PLAYGROUND 2 - Open Qualifiers", "tier1_event": null, "verdict": "rejected"},
@@ -10385,6 +10385,13 @@
     {"league_id": 20444, "name": "FinFun Cup", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20452, "name": "【遗迹】宝可梦-弗诺诺杯", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20453, "name": "LS CD Fastcup #8", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20454, "name": "One More: First Blood", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20454, "name": "One More: First Blood", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20414, "name": "IMMORTALITY: The Second Dynasty", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20456, "name": "Creator Rumble by Ourastore", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20457, "name": "IV Киберспортивный турнир Сбера по Dota 2 [5x5]", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20458, "name": "IV Киберспортивный турнир Сбера по Dota 2 [1x1]", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20459, "name": "Jimi cup", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20460, "name": "Интеррайонный Чемпионат №2", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20462, "name": "GoD.ean League sezonul 4", "tier1_event": null, "verdict": "pending"}
   ]
 }
