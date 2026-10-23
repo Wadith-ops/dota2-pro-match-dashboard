@@ -10392,6 +10392,12 @@
     {"league_id": 20458, "name": "IV Киберспортивный турнир Сбера по Dota 2 [1x1]", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20459, "name": "Jimi cup", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20460, "name": "Интеррайонный Чемпионат №2", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20462, "name": "GoD.ean League sezonul 4", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20462, "name": "GoD.ean League sezonul 4", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20448, "name": "Semana FIIS 25-2", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20463, "name": "FC Queen's Crown 2026", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20465, "name": "Pokut x Ritsu Army cup", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20466, "name": "Турнир по Дота 2 от RIFTBORN 5x5", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20467, "name": "SNK League", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20468, "name": "D2AR La Liga", "tier1_event": null, "verdict": "pending"}
   ]
 }
