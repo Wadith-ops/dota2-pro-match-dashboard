@@ -10398,6 +10398,9 @@
     {"league_id": 20465, "name": "Pokut x Ritsu Army cup", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20466, "name": "Турнир по Дота 2 от RIFTBORN 5x5", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20467, "name": "SNK League", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20468, "name": "D2AR La Liga", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20468, "name": "D2AR La Liga", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20469, "name": "老FIVE恩怨情仇杯", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20470, "name": "Chato League — Season Zero", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20471, "name": "Кубок России Сбера 2026 [3 этап]", "tier1_event": null, "verdict": "pending"}
   ]
 }
