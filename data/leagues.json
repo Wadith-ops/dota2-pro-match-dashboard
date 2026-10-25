@@ -10401,6 +10401,12 @@
     {"league_id": 20468, "name": "D2AR La Liga", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20469, "name": "老FIVE恩怨情仇杯", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20470, "name": "Chato League — Season Zero", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20471, "name": "Кубок России Сбера 2026 [3 этап]", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20471, "name": "Кубок России Сбера 2026 [3 этап]", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20450, "name": "真神杯", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20461, "name": "Xeno Esports Tournament", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20474, "name": "Vanekk NB Cup", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20476, "name": "Void Forge League 2026", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20477, "name": "MellstroyGame", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20478, "name": "Bebriki League: RETURN", "tier1_event": null, "verdict": "pending"}
   ]
 }
