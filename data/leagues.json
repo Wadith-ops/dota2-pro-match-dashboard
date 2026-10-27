@@ -10409,6 +10409,10 @@
     {"league_id": 20477, "name": "MellstroyGame", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20478, "name": "Bebriki League: RETURN", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20442, "name": "DotaTurik Season1", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20480, "name": " FEEL LIKE PRO #2 | FLP", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20480, "name": " FEEL LIKE PRO #2 | FLP", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20482, "name": "The Secret Shop NA PUM", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20483, "name": "The Secret Shop SEA PUM", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20484, "name": "Haste Major Tournament", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20487, "name": "喵喵练习生", "tier1_event": null, "verdict": "pending"}
   ]
 }
