@@ -10192,7 +10192,7 @@
     {"league_id": 20243, "name": "KaaosCup Division 2 | Qualifier 4", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20244, "name": "6ª LIGA DECAN DIVISÃO 2", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20245, "name": "仇人杯", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20208, "name": "BLAST SLAM IX", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20208, "name": "BLAST SLAM IX", "tier1_event": "1win Essence III", "verdict": "pending"},
     {"league_id": 20239, "name": "Efes Cyber Cup 2026", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20241, "name": "KaaosCup Division 2 | Qualifier 2", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20248, "name": "1rep0rt Tournament", "tier1_event": null, "verdict": "pending"},
@@ -10416,6 +10416,7 @@
     {"league_id": 20487, "name": "喵喵练习生", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20486, "name": "1win Essence III", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20511, "name": "DreamLeague Division 2 Series 5", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20539, "name": "UESF UKRANIAN CHAMPIONSHIP 2026 STAGE 5", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20539, "name": "UESF UKRANIAN CHAMPIONSHIP 2026 STAGE 5", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20523, "name": "SEMANA FIIS-2026", "tier1_event": null, "verdict": "pending"}
   ]
 }
