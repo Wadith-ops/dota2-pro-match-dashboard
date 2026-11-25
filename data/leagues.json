@@ -10417,6 +10417,7 @@
     {"league_id": 20486, "name": "1win Essence III", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20511, "name": "DreamLeague Division 2 Series 5", "tier1_event": null, "verdict": "pending"},
     {"league_id": 20539, "name": "UESF UKRANIAN CHAMPIONSHIP 2026 STAGE 5", "tier1_event": null, "verdict": "pending"},
-    {"league_id": 20523, "name": "SEMANA FIIS-2026", "tier1_event": null, "verdict": "pending"}
+    {"league_id": 20523, "name": "SEMANA FIIS-2026", "tier1_event": null, "verdict": "pending"},
+    {"league_id": 20682, "name": "BLAST SLAM X: LOCKOUT", "tier1_event": null, "verdict": "pending"}
   ]
 }
